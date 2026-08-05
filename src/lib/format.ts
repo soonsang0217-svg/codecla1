@@ -26,6 +26,12 @@ export function formatClockTime(iso: string): string {
   return new Date(iso).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
 }
 
+export function formatSleepDuration(minutes: number): string {
+  const hours = Math.floor(minutes / 60);
+  const mins = Math.round(minutes % 60);
+  return `${hours}시간 ${mins}분`;
+}
+
 export function formatDueDate(due?: string | null): string {
   if (!due) return "";
   return new Date(due).toLocaleDateString("ko-KR", { month: "short", day: "numeric" });

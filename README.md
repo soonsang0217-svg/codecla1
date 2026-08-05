@@ -8,11 +8,14 @@
 ## 주요 기능
 
 - **오늘 일정** — Google 캘린더 조회, 생성, 수정, 삭제
+- **월별 캘린더** (`/calendar`) — 달력에서 날짜 클릭해 그날 일정 확인·추가·수정
 - **할 일** — Google Tasks 조회, 체크, 생성, 수정, 삭제
 - **주식 현황** — 설정에서 등록한 관심 종목의 실시간에 가까운 시세 (해외: Finnhub, 국내: Naver 금융)
 - **주요 뉴스** — 국가/키워드 기준 헤드라인 (Google 뉴스 RSS, 키 불필요)
-- **이동 경로/시간** — 일정에 장소가 있으면 집 주소 기준 예상 자동차 이동 시간·거리 (Kakao)
-  와 지도 링크를 함께 표시
+- **이동 경로/시간** — 일정에 장소가 있으면 집 주소 기준 예상 자동차 이동 시간·거리·출발 시각 (Kakao)
+  와 지도 링크를 함께 표시. 일정 등록 시 장소는 Kakao 검색 자동완성으로 입력해 오탈자로 인한
+  경로 계산 실패를 방지
+- **건강** (선택) — 아이패드 단축어 자동화로 전송한 지난밤 수면 시간/점수, 최근 심박수 표시
 - Google 계정으로 로그인(허용된 이메일만), 세션 쿠키로 이후 접근 보호
 - 아이패드 홈 화면에 추가하면 앱처럼 아이콘으로 실행 가능 (PWA manifest)
 
@@ -82,6 +85,42 @@ Google OAuth 클라이언트의 **승인된 리디렉션 URI**는 3단계에서 
 > 경로 API는 별도 상용 계약이 필요합니다. 앱은 자동차 기준 예상 시간을 보여주고, 대중교통 경로는
 > "지도에서 보기" 링크로 카카오맵을 열어 직접 확인하도록 안내합니다.
 
+## Apple 건강 데이터 연동 (선택, 아이패드 단축어 자동화)
+
+아이패드/아이폰 웹 앱은 Apple 건강(HealthKit) 데이터에 기술적으로 직접 접근할 수 없습니다
+(iOS 네이티브 앱만 가능). 대신 **단축어(Shortcuts) 앱의 자동화**로 매일 아침 건강 데이터를
+읽어 우리 서버로 전송하는 방식을 씁니다.
+
+### 1) 서버에 비밀 토큰 설정
+
+Vercel 환경변수에 `HEALTH_INGEST_TOKEN`을 추가합니다 (`openssl rand -base64 32`로 생성한
+무작위 문자열). 이 토큰을 아는 요청만 건강 데이터를 전송할 수 있습니다.
+
+### 2) 아이패드에서 단축어 자동화 만들기
+
+1. **단축어** 앱 → **자동화** 탭 → **+** → **개인 자동화 생성** → **시간대** 선택
+   (예: 매일 오전 7시) → **즉시 실행**(알림 없이 바로 실행)으로 설정
+2. **동작 추가** → **"건강 샘플 찾기"**(Find Health Samples) 액션을 필요한 만큼 추가:
+   - 수면 관련 항목(예: 수면 시간, 수면 점수 — 기기에 표시되는 이름대로 선택), 최신 1개
+   - 심박수, 최신 1개
+3. **"사전"**(Dictionary) 액션으로 아래 키에 맞춰 값을 채워 넣습니다:
+   ```json
+   {
+     "sleepDurationMinutes": 452,
+     "sleepScore": 85,
+     "heartRate": 58
+   }
+   ```
+   (전송하고 싶은 항목만 넣어도 됩니다 — 나머지는 이전 값이 유지됩니다)
+4. **"URL의 콘텐츠 가져오기"**(Get Contents of URL) 액션 추가:
+   - URL: `https://<프로젝트명>.vercel.app/api/health/ingest`
+   - 방법: `POST`
+   - 헤더: `Authorization: Bearer <HEALTH_INGEST_TOKEN 값>`, `Content-Type: application/json`
+   - 요청 본문: 위에서 만든 사전(JSON)
+
+단축어 앱의 정확한 화면/항목 이름은 iOS 버전에 따라 다를 수 있습니다. 막히는 화면이 있으면
+캡처해서 확인 요청하세요.
+
 ## 대안 배포: Docker로 직접 호스팅
 
 집 서버/PC나 Railway·Fly.io 같은 곳에 직접 띄우고 싶다면 Docker로도 실행할 수 있습니다.
@@ -108,8 +147,8 @@ npm run dev
 
 `.env.example` 참고. 필수: `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`,
 `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`, `SESSION_SECRET`.
-나머지(주식/뉴스/경로 API 키, 허용 이메일)는 비워두면 해당 기능만 비활성화된 채로 앱은
-정상 동작합니다.
+나머지(주식/뉴스/경로 API 키, 허용 이메일, `HEALTH_INGEST_TOKEN`)는 비워두면 해당 기능만
+비활성화된 채로 앱은 정상 동작합니다.
 
 ## 프로젝트 구조
 
@@ -117,15 +156,18 @@ npm run dev
 src/
   app/
     login/           로그인 페이지
-    briefing/         메인 대시보드 (일정/할 일/시세/뉴스)
+    briefing/         메인 대시보드 (일정/할 일/건강/시세/뉴스)
+    calendar/          월별 캘린더 뷰
     settings/          집 주소·관심 종목·뉴스 설정
     api/
       auth/            Google OAuth 로그인/콜백/로그아웃/상태
       calendar/        캘린더 이벤트 CRUD
       tasks/           할 일 CRUD
+      places/          장소 자동완성 (Kakao 검색 프록시)
+      health/          건강 데이터 조회 / 단축어 수신(ingest)
       briefing/        일간 브리핑 집계 API
       settings/        사용자 설정 조회/저장
-  lib/                 Google API, 외부 데이터 소스, 세션, Upstash 등 핵심 로직
-  components/          일정/할 일 작성-수정 모달, 카드 UI
+  lib/                 Google API, 외부 데이터 소스, 세션, Upstash, 타임존 등 핵심 로직
+  components/          일정/할 일 작성-수정 모달, 카드 UI, 장소 자동완성
   proxy.ts             인증 게이팅 (로그인 안 된 요청 차단)
 ```
