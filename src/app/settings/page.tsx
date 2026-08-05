@@ -107,18 +107,10 @@ export default function SettingsPage() {
             onChange={(e) => setSettings({ ...settings, newsCountry: e.target.value })}
             placeholder="kr"
           />
-        </div>
-
-        <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">
-            뉴스 검색어 (선택, 입력 시 국가 코드 대신 사용)
-          </label>
-          <input
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-            value={settings.newsQuery}
-            onChange={(e) => setSettings({ ...settings, newsQuery: e.target.value })}
-            placeholder="예: 경제"
-          />
+          <p className="mt-1 text-xs text-slate-400">
+            뉴스 탭/검색 결과의 언어·지역 기준입니다. 카테고리 탭과 검색은 브리핑 화면에서
+            바로 바꿀 수 있습니다.
+          </p>
         </div>
 
         <div className="flex items-center gap-3">

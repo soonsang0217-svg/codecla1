@@ -3,7 +3,6 @@ import { requireGoogleClient, handleApiError } from "@/lib/apiAuth";
 import { listEvents } from "@/lib/googleCalendar";
 import { listTasks } from "@/lib/googleTasks";
 import { getStockQuotes } from "@/lib/stocks";
-import { getTopHeadlines } from "@/lib/news";
 import { getCommuteInfo } from "@/lib/directions";
 import { getSettings } from "@/lib/config";
 import { getTodayRangeInKst } from "@/lib/timezone";
@@ -15,11 +14,10 @@ export async function GET() {
 
     const { startOfDay, endOfDay } = getTodayRangeInKst();
 
-    const [events, tasks, stocks, news] = await Promise.all([
+    const [events, tasks, stocks] = await Promise.all([
       listEvents(auth, startOfDay.toISOString(), endOfDay.toISOString()),
       listTasks(auth, false),
       getStockQuotes(settings.stockSymbols),
-      getTopHeadlines(settings.newsCountry, settings.newsQuery),
     ]);
 
     const eventsWithCommute = await Promise.all(
@@ -41,7 +39,6 @@ export async function GET() {
       events: eventsWithCommute,
       tasks,
       stocks,
-      news,
       homeAddressConfigured: !!settings.homeAddress,
     });
   } catch (err) {

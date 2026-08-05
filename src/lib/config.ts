@@ -4,7 +4,6 @@ export interface AppSettings {
   stockSymbols: string[];
   homeAddress: string;
   newsCountry: string;
-  newsQuery: string;
 }
 
 const SETTINGS_KEY = "settings";
@@ -17,7 +16,6 @@ function defaultSettings(): AppSettings {
       .filter(Boolean),
     homeAddress: process.env.HOME_ADDRESS || "",
     newsCountry: process.env.NEWS_COUNTRY || "kr",
-    newsQuery: process.env.NEWS_QUERY || "",
   };
 }
 

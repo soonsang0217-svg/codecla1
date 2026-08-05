@@ -9,7 +9,7 @@ export interface NewsItem {
 }
 
 const CACHE_TTL_SECONDS = 600; // 10 minutes
-const MAX_ITEMS = 8;
+const MAX_ITEMS = 10;
 
 // Maps a 2-letter country code to the Google News UI language it publishes
 // headlines in. Falls back to English for anything not listed.

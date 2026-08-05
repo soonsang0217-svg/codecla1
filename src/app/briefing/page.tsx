@@ -7,6 +7,8 @@ import type { BriefingEvent, BriefingResponse, BriefingTask } from "@/lib/types"
 import { formatDueDate, formatTodayKorean } from "@/lib/format";
 import EventCard from "@/components/EventCard";
 import StockCard from "@/components/StockCard";
+import NewsPanel from "@/components/NewsPanel";
+import Clock from "@/components/Clock";
 import EventFormModal, { type EventFormValues } from "@/components/EventFormModal";
 import TaskFormModal, { type TaskFormValues } from "@/components/TaskFormModal";
 
@@ -124,7 +126,8 @@ export default function BriefingPage() {
           <h1 className="text-2xl font-bold text-slate-900">아침 브리핑</h1>
           {data && <p className="text-sm text-slate-500">{formatTodayKorean(data.date)}</p>}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-4">
+          <Clock />
           <button
             onClick={load}
             className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
@@ -253,25 +256,9 @@ export default function BriefingPage() {
           </div>
         </section>
 
-        <section>
+        <section className="lg:col-span-2">
           <h2 className="mb-3 text-lg font-bold text-slate-900">주요 뉴스</h2>
-          <div className="space-y-2">
-            {data?.news.map((item) => (
-              <a
-                key={item.url}
-                href={item.url}
-                target="_blank"
-                rel="noreferrer"
-                className="block rounded-xl border border-slate-200 bg-white p-3 shadow-sm hover:border-slate-300"
-              >
-                <p className="text-sm font-medium text-slate-900">{item.title}</p>
-                <p className="mt-1 text-xs text-slate-400">{item.source}</p>
-              </a>
-            ))}
-            {data?.news.length === 0 && (
-              <p className="text-sm text-slate-400">불러올 뉴스가 없습니다.</p>
-            )}
-          </div>
+          <NewsPanel />
         </section>
       </div>
 

@@ -30,7 +30,6 @@ export interface BriefingResponse {
   events: BriefingEvent[];
   tasks: BriefingTask[];
   stocks: StockQuote[];
-  news: NewsItem[];
   homeAddressConfigured: boolean;
 }
 
