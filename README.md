@@ -10,7 +10,7 @@
 - **오늘 일정** — Google 캘린더 조회, 생성, 수정, 삭제
 - **할 일** — Google Tasks 조회, 체크, 생성, 수정, 삭제
 - **주식 현황** — 설정에서 등록한 관심 종목의 실시간에 가까운 시세 (Finnhub)
-- **주요 뉴스** — 국가/키워드 기준 헤드라인 (NewsAPI.org)
+- **주요 뉴스** — 국가/키워드 기준 헤드라인 (Google 뉴스 RSS, 키 불필요)
 - **이동 경로/시간** — 일정에 장소가 있으면 집 주소 기준 예상 자동차 이동 시간·거리 (Kakao)
   와 지도 링크를 함께 표시
 - Google 계정으로 로그인(허용된 이메일만), 세션 쿠키로 이후 접근 보호
@@ -23,7 +23,7 @@
 - **Upstash Redis** (REST 기반, 서버리스 친화적) — Google 토큰, 사용자 설정, 외부 API 응답
   캐시를 저장. 로컬 파일에 의존하지 않으므로 Vercel 같은 서버리스 플랫폼에서도 재배포/재시작과
   무관하게 데이터가 유지됩니다.
-- **Finnhub / NewsAPI.org / Kakao Local·Mobility API** — 외부 데이터 소스
+- **Finnhub / Google 뉴스 RSS / Kakao Local·Mobility API** — 외부 데이터 소스
 - 서명된 쿠키 기반 세션(자체 구현) — 별도 인증 서버 없이 허용된 Google 계정 1명(또는 소수)만
   접근하도록 게이팅
 
@@ -44,7 +44,7 @@
 |---|---|---|
 | Google OAuth (필수) | [Google Cloud Console](https://console.cloud.google.com/) | Calendar API + Tasks API 활성화 → OAuth 클라이언트(웹 앱) 생성 |
 | 주식 시세 | [finnhub.io](https://finnhub.io) 무료 가입 | API 키 |
-| 뉴스 | [newsapi.org](https://newsapi.org) 무료 가입 | API 키 |
+| 뉴스 | 없음 (Google 뉴스 RSS, 키/가입 불필요) | - |
 | 이동 경로 | [Kakao Developers](https://developers.kakao.com) | 앱 생성 → Local + 길찾기(Directions) 제품 활성화 → REST API 키 |
 
 Google OAuth 클라이언트의 **승인된 리디렉션 URI**는 3단계에서 Vercel이 발급해주는 주소를
@@ -62,7 +62,7 @@ Google OAuth 클라이언트의 **승인된 리디렉션 URI**는 3단계에서 
    - `GOOGLE_REDIRECT_URI` = `https://<프로젝트명>.vercel.app/api/auth/google/callback`
      (정확한 도메인은 Deploy 후 확인 가능; 미리 원하는 프로젝트명을 정해서 입력해도 됨)
    - `ALLOWED_EMAIL`, `SESSION_SECRET`(`openssl rand -base64 32` 또는 아무 긴 무작위 문자열)
-   - `FINNHUB_API_KEY`, `STOCK_SYMBOLS`, `NEWSAPI_KEY`, `NEWS_COUNTRY`, `NEWS_QUERY`
+   - `FINNHUB_API_KEY`, `STOCK_SYMBOLS`, `NEWS_COUNTRY`, `NEWS_QUERY`
    - `KAKAO_REST_API_KEY`, `HOME_ADDRESS`
 4. **Deploy** 클릭 → 몇 분 내 `https://<프로젝트명>.vercel.app` 주소 발급
 5. Google Cloud Console로 돌아가 OAuth 클라이언트의 **승인된 리디렉션 URI**를 실제 Vercel
