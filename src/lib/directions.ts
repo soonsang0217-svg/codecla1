@@ -65,16 +65,44 @@ async function searchKeyword(query: string, apiKey: string): Promise<GeoPoint | 
   return { lat: Number(doc.y), lng: Number(doc.x), name: doc.place_name };
 }
 
+// Calendar locations often come as "장소명, 대한민국 주소..." (e.g. pasted from
+// Google Maps). Searching that whole blob rarely matches, so also try it
+// without the country name, and each comma-separated segment on its own
+// (address-like segments tend to trail, so try those first).
+function buildGeocodeCandidates(raw: string): string[] {
+  const stripCountry = (s: string) => s.replace(/^대한민국\s*/, "").trim();
+
+  const candidates = new Set<string>();
+  const trimmed = raw.trim();
+  candidates.add(trimmed);
+  candidates.add(stripCountry(trimmed));
+
+  const parts = trimmed
+    .split(",")
+    .map((p) => stripCountry(p.trim()))
+    .filter(Boolean);
+  if (parts.length > 1) {
+    for (const part of [...parts].reverse()) {
+      candidates.add(part);
+    }
+  }
+
+  return Array.from(candidates).filter(Boolean);
+}
+
 async function geocode(query: string, apiKey: string): Promise<GeoPoint | null> {
   const cacheKey = `geocode:${query}`;
   const cached = await getKV<GeoPoint>(cacheKey);
   if (cached) return cached;
 
-  const point = (await searchAddress(query, apiKey)) ?? (await searchKeyword(query, apiKey));
-  if (!point) return null;
-
-  await setKV(cacheKey, point, GEOCODE_CACHE_TTL_SECONDS);
-  return point;
+  for (const candidate of buildGeocodeCandidates(query)) {
+    const point = (await searchAddress(candidate, apiKey)) ?? (await searchKeyword(candidate, apiKey));
+    if (point) {
+      await setKV(cacheKey, point, GEOCODE_CACHE_TTL_SECONDS);
+      return point;
+    }
+  }
+  return null;
 }
 
 interface KakaoDirectionsResponse {
