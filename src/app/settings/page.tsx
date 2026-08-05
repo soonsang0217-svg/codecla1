@@ -83,10 +83,11 @@ export default function SettingsPage() {
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
             value={stockSymbolsInput}
             onChange={(e) => setStockSymbolsInput(e.target.value)}
-            placeholder="예: AAPL, MSFT, NVDA"
+            placeholder="예: AAPL, MSFT, 005930, 035420"
           />
           <p className="mt-1 text-xs text-slate-400">
-            Finnhub 티커 기호를 사용하세요 (국내 종목은 지원이 제한적일 수 있습니다).
+            해외 종목은 Finnhub 티커(예: AAPL), 국내 종목은 6자리 종목코드(예: 005930 삼성전자)를
+            입력하세요. 섞어서 입력해도 됩니다.
           </p>
         </div>
 

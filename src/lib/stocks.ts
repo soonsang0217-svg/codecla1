@@ -2,6 +2,7 @@ import { getKV, setKV } from "./db";
 
 export interface StockQuote {
   symbol: string;
+  name?: string;
   price: number | null;
   change: number | null;
   changePercent: number | null;
@@ -10,6 +11,7 @@ export interface StockQuote {
 }
 
 const CACHE_TTL_SECONDS = 60;
+const KOREAN_STOCK_CODE = /^\d{6}$/;
 
 interface FinnhubQuote {
   c: number; // current price
@@ -18,7 +20,7 @@ interface FinnhubQuote {
   pc: number; // previous close
 }
 
-async function fetchQuote(symbol: string, apiKey: string): Promise<StockQuote> {
+async function fetchFinnhubQuote(symbol: string, apiKey: string): Promise<StockQuote> {
   const cacheKey = `stock:${symbol}`;
   const cached = await getKV<StockQuote>(cacheKey);
   if (cached) return cached;
@@ -56,17 +58,86 @@ async function fetchQuote(symbol: string, apiKey: string): Promise<StockQuote> {
   }
 }
 
-export async function getStockQuotes(symbols: string[]): Promise<StockQuote[]> {
-  const apiKey = process.env.FINNHUB_API_KEY;
-  if (!apiKey) {
-    return symbols.map((symbol) => ({
-      symbol,
+interface NaverDirection {
+  code: string; // "1" 상한가, "2" 상승, "3" 보합, "4" 하한가, "5" 하락
+}
+
+interface NaverBasicResponse {
+  itemCode: string;
+  stockName: string;
+  closePrice: string; // comma-formatted, e.g. "246,000"
+  compareToPreviousClosePrice: string; // comma-formatted, unsigned
+  compareToPreviousPrice: NaverDirection;
+  fluctuationsRatio: string; // percent, unsigned
+}
+
+function parseNaverNumber(value: string): number {
+  return Number(value.replace(/,/g, ""));
+}
+
+// Naver's unsigned fields report direction separately via this code.
+function naverSign(code: string): 1 | -1 {
+  return code === "4" || code === "5" ? -1 : 1;
+}
+
+async function fetchNaverQuote(code: string): Promise<StockQuote> {
+  const cacheKey = `stock:${code}`;
+  const cached = await getKV<StockQuote>(cacheKey);
+  if (cached) return cached;
+
+  try {
+    const res = await fetch(`https://m.stock.naver.com/api/stock/${code}/basic`, {
+      cache: "no-store",
+    });
+    if (!res.ok) throw new Error(`Naver Finance returned ${res.status}`);
+    const data = (await res.json()) as NaverBasicResponse;
+
+    const sign = naverSign(data.compareToPreviousPrice?.code ?? "3");
+    const price = parseNaverNumber(data.closePrice);
+    const change = sign * Math.abs(parseNaverNumber(data.compareToPreviousClosePrice));
+    const changePercent = sign * Math.abs(parseNaverNumber(data.fluctuationsRatio));
+
+    const quote: StockQuote = {
+      symbol: code,
+      name: data.stockName,
+      price,
+      change,
+      changePercent,
+      previousClose: price - change,
+    };
+    await setKV(cacheKey, quote, CACHE_TTL_SECONDS);
+    return quote;
+  } catch (err) {
+    return {
+      symbol: code,
       price: null,
       change: null,
       changePercent: null,
       previousClose: null,
-      error: "FINNHUB_API_KEY not configured",
-    }));
+      error: err instanceof Error ? err.message : "failed to fetch quote",
+    };
   }
-  return Promise.all(symbols.map((symbol) => fetchQuote(symbol, apiKey)));
+}
+
+export async function getStockQuotes(symbols: string[]): Promise<StockQuote[]> {
+  const apiKey = process.env.FINNHUB_API_KEY;
+
+  return Promise.all(
+    symbols.map((symbol) => {
+      if (KOREAN_STOCK_CODE.test(symbol)) {
+        return fetchNaverQuote(symbol);
+      }
+      if (!apiKey) {
+        return Promise.resolve<StockQuote>({
+          symbol,
+          price: null,
+          change: null,
+          changePercent: null,
+          previousClose: null,
+          error: "FINNHUB_API_KEY not configured",
+        });
+      }
+      return fetchFinnhubQuote(symbol, apiKey);
+    })
+  );
 }
