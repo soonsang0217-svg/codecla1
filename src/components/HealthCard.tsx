@@ -2,7 +2,13 @@ import type { HealthSnapshot } from "@/lib/types";
 import { formatSleepDuration, formatClockTime } from "@/lib/format";
 
 export default function HealthCard({ health }: { health: HealthSnapshot | null }) {
-  if (!health || (health.sleepDurationMinutes == null && health.heartRate == null)) {
+  if (
+    !health ||
+    (health.sleepDurationMinutes == null &&
+      health.sleepScore == null &&
+      health.sleepPatternChange == null &&
+      health.heartRate == null)
+  ) {
     return (
       <p className="rounded-xl border border-dashed border-slate-300 p-4 text-center text-sm text-slate-400">
         아직 전송된 건강 데이터가 없습니다.
@@ -30,6 +36,12 @@ export default function HealthCard({ health }: { health: HealthSnapshot | null }
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <p className="text-sm font-semibold text-slate-900">심박수</p>
           <p className="mt-1 text-xl font-bold text-slate-900">{health.heartRate} bpm</p>
+        </div>
+      )}
+      {health.sleepPatternChange && (
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <p className="text-sm font-semibold text-slate-900">수면 패턴 변화</p>
+          <p className="mt-1 text-sm text-slate-700">{health.sleepPatternChange}</p>
         </div>
       )}
       {health.recordedAt && (

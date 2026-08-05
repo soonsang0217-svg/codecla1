@@ -108,6 +108,7 @@ Vercel 환경변수에 `HEALTH_INGEST_TOKEN`을 추가합니다 (`openssl rand -
    {
      "sleepDurationMinutes": 452,
      "sleepScore": 85,
+     "sleepPatternChange": "지난 7일 평균보다 30분 더 잤어요",
      "heartRate": 58
    }
    ```

@@ -3,6 +3,8 @@ import { getKV, setKV } from "./db";
 export interface HealthSnapshot {
   sleepDurationMinutes: number | null;
   sleepScore: number | null;
+  /** Apple's "sleep pattern change" insight text (e.g. trend vs. recent average). */
+  sleepPatternChange: string | null;
   heartRate: number | null;
   /** When Apple Health recorded these readings (from the Shortcut), ISO string. */
   recordedAt: string | null;
@@ -13,6 +15,7 @@ export interface HealthSnapshot {
 export interface HealthSnapshotInput {
   sleepDurationMinutes?: number | null;
   sleepScore?: number | null;
+  sleepPatternChange?: string | null;
   heartRate?: number | null;
   recordedAt?: string | null;
 }
@@ -28,6 +31,7 @@ export async function saveHealthSnapshot(input: HealthSnapshotInput): Promise<He
   const next: HealthSnapshot = {
     sleepDurationMinutes: input.sleepDurationMinutes ?? existing?.sleepDurationMinutes ?? null,
     sleepScore: input.sleepScore ?? existing?.sleepScore ?? null,
+    sleepPatternChange: input.sleepPatternChange ?? existing?.sleepPatternChange ?? null,
     heartRate: input.heartRate ?? existing?.heartRate ?? null,
     recordedAt: input.recordedAt ?? existing?.recordedAt ?? null,
     updatedAt: new Date().toISOString(),
