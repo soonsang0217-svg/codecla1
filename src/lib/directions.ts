@@ -28,7 +28,7 @@ interface KakaoKeywordResponse {
 
 async function geocode(query: string, apiKey: string): Promise<GeoPoint | null> {
   const cacheKey = `geocode:${query}`;
-  const cached = getKV<GeoPoint>(cacheKey);
+  const cached = await getKV<GeoPoint>(cacheKey);
   if (cached) return cached;
 
   const res = await fetch(
@@ -42,7 +42,7 @@ async function geocode(query: string, apiKey: string): Promise<GeoPoint | null> 
   if (!doc) return null;
 
   const point: GeoPoint = { lat: Number(doc.y), lng: Number(doc.x), name: doc.place_name };
-  setKV(cacheKey, point, GEOCODE_CACHE_TTL_SECONDS);
+  await setKV(cacheKey, point, GEOCODE_CACHE_TTL_SECONDS);
   return point;
 }
 

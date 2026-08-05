@@ -20,7 +20,7 @@ interface FinnhubQuote {
 
 async function fetchQuote(symbol: string, apiKey: string): Promise<StockQuote> {
   const cacheKey = `stock:${symbol}`;
-  const cached = getKV<StockQuote>(cacheKey);
+  const cached = await getKV<StockQuote>(cacheKey);
   if (cached) return cached;
 
   try {
@@ -42,7 +42,7 @@ async function fetchQuote(symbol: string, apiKey: string): Promise<StockQuote> {
       changePercent: data.dp,
       previousClose: data.pc,
     };
-    setKV(cacheKey, quote, CACHE_TTL_SECONDS);
+    await setKV(cacheKey, quote, CACHE_TTL_SECONDS);
     return quote;
   } catch (err) {
     return {

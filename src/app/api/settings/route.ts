@@ -1,12 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSettings, updateSettings, type AppSettings } from "@/lib/config";
+import { handleApiError } from "@/lib/apiAuth";
 
 export async function GET() {
-  return NextResponse.json(getSettings());
+  try {
+    return NextResponse.json(await getSettings());
+  } catch (err) {
+    return handleApiError(err);
+  }
 }
 
 export async function PUT(request: NextRequest) {
-  const body = (await request.json()) as Partial<AppSettings>;
-  const next = updateSettings(body);
-  return NextResponse.json(next);
+  try {
+    const body = (await request.json()) as Partial<AppSettings>;
+    const next = await updateSettings(body);
+    return NextResponse.json(next);
+  } catch (err) {
+    return handleApiError(err);
+  }
 }

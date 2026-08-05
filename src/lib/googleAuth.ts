@@ -35,21 +35,21 @@ export async function exchangeCodeForTokens(code: string): Promise<Credentials> 
   return tokens;
 }
 
-export function saveTokens(tokens: Credentials): void {
-  const existing = getKV<Credentials>(TOKENS_KEY) || {};
-  setKV(TOKENS_KEY, { ...existing, ...tokens });
+export async function saveTokens(tokens: Credentials): Promise<void> {
+  const existing = (await getKV<Credentials>(TOKENS_KEY)) || {};
+  await setKV(TOKENS_KEY, { ...existing, ...tokens });
 }
 
-export function loadTokens(): Credentials | null {
+export async function loadTokens(): Promise<Credentials | null> {
   return getKV<Credentials>(TOKENS_KEY);
 }
 
-export function clearTokens(): void {
-  deleteKV(TOKENS_KEY);
+export async function clearTokens(): Promise<void> {
+  await deleteKV(TOKENS_KEY);
 }
 
-export function isConnected(): boolean {
-  const tokens = loadTokens();
+export async function isConnected(): Promise<boolean> {
+  const tokens = await loadTokens();
   return !!tokens?.refresh_token;
 }
 
@@ -58,12 +58,14 @@ export function isConnected(): boolean {
  * access tokens back to storage automatically via the "tokens" event.
  */
 export async function getAuthorizedClient(): Promise<OAuth2Client | null> {
-  const tokens = loadTokens();
+  const tokens = await loadTokens();
   if (!tokens?.refresh_token) return null;
 
   const client = createOAuthClient();
   client.setCredentials(tokens);
-  client.on("tokens", (newTokens) => saveTokens(newTokens));
+  client.on("tokens", (newTokens) => {
+    saveTokens(newTokens).catch((err) => console.error("Failed to persist refreshed tokens", err));
+  });
 
   return client;
 }

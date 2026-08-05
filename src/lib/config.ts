@@ -21,14 +21,14 @@ function defaultSettings(): AppSettings {
   };
 }
 
-export function getSettings(): AppSettings {
-  const stored = getKV<Partial<AppSettings>>(SETTINGS_KEY);
+export async function getSettings(): Promise<AppSettings> {
+  const stored = await getKV<Partial<AppSettings>>(SETTINGS_KEY);
   return { ...defaultSettings(), ...stored };
 }
 
-export function updateSettings(patch: Partial<AppSettings>): AppSettings {
-  const next = { ...getSettings(), ...patch };
-  setKV(SETTINGS_KEY, next);
+export async function updateSettings(patch: Partial<AppSettings>): Promise<AppSettings> {
+  const next = { ...(await getSettings()), ...patch };
+  await setKV(SETTINGS_KEY, next);
   return next;
 }
 

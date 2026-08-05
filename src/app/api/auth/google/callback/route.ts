@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(new URL("/login?error=not_allowed", request.url));
     }
 
-    saveTokens(tokens);
+    await saveTokens(tokens);
 
     const response = NextResponse.redirect(new URL("/briefing", request.url));
     response.cookies.set(SESSION_COOKIE, createSessionCookie(email), {

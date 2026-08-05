@@ -26,7 +26,7 @@ export async function getTopHeadlines(country: string, query?: string): Promise<
   if (!apiKey) return [];
 
   const cacheKey = `news:${country}:${query ?? ""}`;
-  const cached = getKV<NewsItem[]>(cacheKey);
+  const cached = await getKV<NewsItem[]>(cacheKey);
   if (cached) return cached;
 
   const params = new URLSearchParams({ apiKey, pageSize: "8" });
@@ -50,7 +50,7 @@ export async function getTopHeadlines(country: string, query?: string): Promise<
       publishedAt: a.publishedAt,
     }));
 
-    setKV(cacheKey, items, CACHE_TTL_SECONDS);
+    await setKV(cacheKey, items, CACHE_TTL_SECONDS);
     return items;
   } catch (err) {
     console.error("Failed to fetch news", err);

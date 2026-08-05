@@ -14,12 +14,9 @@ RUN npm run build
 FROM base AS runner
 WORKDIR /app
 ENV NODE_ENV=production
-ENV DATA_DIR=/app/data
 
 RUN groupadd --system --gid 1001 nodejs \
-  && useradd --system --uid 1001 --gid nodejs nextjs \
-  && mkdir -p /app/data \
-  && chown -R nextjs:nodejs /app/data
+  && useradd --system --uid 1001 --gid nodejs nextjs
 
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./

@@ -10,7 +10,7 @@ import { getSettings } from "@/lib/config";
 export async function GET() {
   try {
     const auth = await requireGoogleClient();
-    const settings = getSettings();
+    const settings = await getSettings();
 
     const now = new Date();
     const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
