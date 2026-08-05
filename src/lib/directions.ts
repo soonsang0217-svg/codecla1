@@ -26,22 +26,53 @@ interface KakaoKeywordResponse {
   documents: KakaoKeywordDoc[];
 }
 
+interface KakaoAddressDoc {
+  address_name: string;
+  x: string; // lng
+  y: string; // lat
+}
+
+interface KakaoAddressResponse {
+  documents: KakaoAddressDoc[];
+}
+
+// Structured addresses ("서울 강남구 테헤란로 123") match best against the
+// address search endpoint; place names ("강남역 스타벅스") match best against
+// keyword search. Try address search first, then fall back to keyword search.
+async function searchAddress(query: string, apiKey: string): Promise<GeoPoint | null> {
+  const res = await fetch(
+    `https://dapi.kakao.com/v2/local/search/address.json?query=${encodeURIComponent(query)}&size=1`,
+    { headers: { Authorization: `KakaoAK ${apiKey}` }, cache: "no-store" }
+  );
+  if (!res.ok) throw new Error(`Kakao address search returned ${res.status}`);
+
+  const data = (await res.json()) as KakaoAddressResponse;
+  const doc = data.documents?.[0];
+  if (!doc) return null;
+  return { lat: Number(doc.y), lng: Number(doc.x), name: doc.address_name };
+}
+
+async function searchKeyword(query: string, apiKey: string): Promise<GeoPoint | null> {
+  const res = await fetch(
+    `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(query)}&size=1`,
+    { headers: { Authorization: `KakaoAK ${apiKey}` }, cache: "no-store" }
+  );
+  if (!res.ok) throw new Error(`Kakao keyword search returned ${res.status}`);
+
+  const data = (await res.json()) as KakaoKeywordResponse;
+  const doc = data.documents?.[0];
+  if (!doc) return null;
+  return { lat: Number(doc.y), lng: Number(doc.x), name: doc.place_name };
+}
+
 async function geocode(query: string, apiKey: string): Promise<GeoPoint | null> {
   const cacheKey = `geocode:${query}`;
   const cached = await getKV<GeoPoint>(cacheKey);
   if (cached) return cached;
 
-  const res = await fetch(
-    `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(query)}&size=1`,
-    { headers: { Authorization: `KakaoAK ${apiKey}` }, cache: "no-store" }
-  );
-  if (!res.ok) throw new Error(`Kakao geocoding returned ${res.status}`);
+  const point = (await searchAddress(query, apiKey)) ?? (await searchKeyword(query, apiKey));
+  if (!point) return null;
 
-  const data = (await res.json()) as KakaoKeywordResponse;
-  const doc = data.documents?.[0];
-  if (!doc) return null;
-
-  const point: GeoPoint = { lat: Number(doc.y), lng: Number(doc.x), name: doc.place_name };
   await setKV(cacheKey, point, GEOCODE_CACHE_TTL_SECONDS);
   return point;
 }
