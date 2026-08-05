@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireGoogleClient, handleApiError } from "@/lib/apiAuth";
 import { listEvents, createEvent, type CalendarEventInput } from "@/lib/googleCalendar";
+import { getTodayRangeInKst } from "@/lib/timezone";
 
 export async function GET(request: NextRequest) {
   try {
     const auth = await requireGoogleClient();
-    const now = new Date();
-    const defaultFrom = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
-    const defaultTo = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString();
+    const { startOfDay } = getTodayRangeInKst();
+    const defaultFrom = startOfDay.toISOString();
+    const defaultTo = new Date(startOfDay.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString();
 
     const from = request.nextUrl.searchParams.get("from") ?? defaultFrom;
     const to = request.nextUrl.searchParams.get("to") ?? defaultTo;

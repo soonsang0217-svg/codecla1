@@ -6,22 +6,17 @@ import { getStockQuotes } from "@/lib/stocks";
 import { getTopHeadlines } from "@/lib/news";
 import { getCommuteInfo } from "@/lib/directions";
 import { getSettings } from "@/lib/config";
+import { getTodayRangeInKst } from "@/lib/timezone";
 
 export async function GET() {
   try {
     const auth = await requireGoogleClient();
     const settings = await getSettings();
 
-    const now = new Date();
-    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
-    const endOfDay = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate() + 1
-    ).toISOString();
+    const { startOfDay, endOfDay } = getTodayRangeInKst();
 
     const [events, tasks, stocks, news] = await Promise.all([
-      listEvents(auth, startOfDay, endOfDay),
+      listEvents(auth, startOfDay.toISOString(), endOfDay.toISOString()),
       listTasks(auth, false),
       getStockQuotes(settings.stockSymbols),
       getTopHeadlines(settings.newsCountry, settings.newsQuery),
@@ -32,13 +27,17 @@ export async function GET() {
         if (!event.location || !settings.homeAddress) {
           return { ...event, commute: null };
         }
-        const commute = await getCommuteInfo(settings.homeAddress, event.location);
+        const commute = await getCommuteInfo(
+          settings.homeAddress,
+          event.location,
+          event.start?.dateTime
+        );
         return { ...event, commute };
       })
     );
 
     return NextResponse.json({
-      date: startOfDay,
+      date: startOfDay.toISOString(),
       events: eventsWithCommute,
       tasks,
       stocks,

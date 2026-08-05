@@ -1,5 +1,5 @@
 import type { BriefingEvent } from "@/lib/types";
-import { formatEventTime } from "@/lib/format";
+import { formatEventTime, formatClockTime } from "@/lib/format";
 
 interface Props {
   event: BriefingEvent;
@@ -34,6 +34,11 @@ export default function EventCard({ event, onClick }: Props) {
             </span>
           ) : (
             <span>{commute.note ?? "경로 정보를 확인할 수 없습니다."}</span>
+          )}
+          {commute.departureBy && (
+            <div className="mt-1 font-medium text-slate-900">
+              ⏰ {formatClockTime(commute.departureBy)}까지 출발 (5분 전 도착 기준, 현재 교통 상황)
+            </div>
           )}
           <a
             href={commute.mapLink}

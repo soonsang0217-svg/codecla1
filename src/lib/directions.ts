@@ -12,9 +12,27 @@ export interface CommuteInfo {
   distanceKm: number | null;
   mapLink: string;
   note?: string;
+  /** ISO timestamp to leave by, to arrive DEPARTURE_BUFFER_MINUTES early. Null if unknown. */
+  departureBy: string | null;
 }
 
 const GEOCODE_CACHE_TTL_SECONDS = 60 * 60 * 24; // 24h
+
+// Kakao's public Directions API has no "depart at a future time" option, so
+// durationMinutes always reflects *current* traffic conditions — this is a
+// reasonable estimate when checked close to departure, but drifts the
+// further ahead of time it's checked (e.g. the night before).
+const DEPARTURE_BUFFER_MINUTES = 5;
+
+function computeDepartureBy(
+  eventStartIso: string | null | undefined,
+  durationMinutes: number | null
+): string | null {
+  if (!eventStartIso || durationMinutes == null) return null;
+  const start = new Date(eventStartIso);
+  if (Number.isNaN(start.getTime())) return null;
+  return new Date(start.getTime() - (durationMinutes + DEPARTURE_BUFFER_MINUTES) * 60_000).toISOString();
+}
 
 interface KakaoKeywordDoc {
   place_name: string;
@@ -149,7 +167,8 @@ function kakaoMapLink(destination: GeoPoint): string {
  */
 export async function getCommuteInfo(
   homeAddress: string,
-  destinationText: string
+  destinationText: string,
+  eventStartIso?: string | null
 ): Promise<CommuteInfo | null> {
   const apiKey = process.env.KAKAO_REST_API_KEY;
   if (!apiKey || !homeAddress || !destinationText) return null;
@@ -167,6 +186,7 @@ export async function getCommuteInfo(
         distanceKm: null,
         mapLink: `https://map.kakao.com/?q=${encodeURIComponent(destinationText)}`,
         note: "위치를 찾을 수 없어 경로를 계산하지 못했습니다.",
+        departureBy: null,
       };
     }
 
@@ -177,6 +197,7 @@ export async function getCommuteInfo(
       distanceKm: route?.distanceKm ?? null,
       mapLink: kakaoMapLink(destination),
       note: route ? undefined : "자동차 경로를 계산하지 못했습니다. 지도에서 대중교통 경로를 확인하세요.",
+      departureBy: computeDepartureBy(eventStartIso, route?.durationMinutes ?? null),
     };
   } catch (err) {
     console.error("Failed to compute commute info", err);
@@ -186,6 +207,7 @@ export async function getCommuteInfo(
       distanceKm: null,
       mapLink: `https://map.kakao.com/?q=${encodeURIComponent(destinationText)}`,
       note: "경로 계산 중 오류가 발생했습니다.",
+      departureBy: null,
     };
   }
 }

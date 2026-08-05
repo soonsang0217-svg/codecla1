@@ -22,6 +22,10 @@ export function toDateTimeLocalInput(time?: BriefingEventTime | null): string {
   )}:${pad(d.getMinutes())}`;
 }
 
+export function formatClockTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
+}
+
 export function formatDueDate(due?: string | null): string {
   if (!due) return "";
   return new Date(due).toLocaleDateString("ko-KR", { month: "short", day: "numeric" });
