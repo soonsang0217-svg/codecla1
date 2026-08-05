@@ -18,12 +18,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  let body: HealthSnapshotInput;
+  let rawBody: unknown;
   try {
-    body = (await request.json()) as HealthSnapshotInput;
+    rawBody = await request.json();
   } catch {
     return NextResponse.json({ error: "invalid JSON body" }, { status: 400 });
   }
+
+  // Logged in full so we can see exactly what shape Shortcuts sends for
+  // fields we don't have strict parsing for yet (e.g. raw sample arrays) —
+  // check this in Vercel's Runtime Logs.
+  console.log("Health ingest payload:", JSON.stringify(rawBody));
+
+  const body = (rawBody ?? {}) as HealthSnapshotInput;
 
   try {
     const snapshot = await saveHealthSnapshot({
