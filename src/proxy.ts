@@ -24,7 +24,14 @@ export function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const session = verifySessionCookie(request.cookies.get(SESSION_COOKIE)?.value);
+  let session: { email: string } | null = null;
+  try {
+    session = verifySessionCookie(request.cookies.get(SESSION_COOKIE)?.value);
+  } catch (err) {
+    // Most likely SESSION_SECRET is missing/misconfigured. Fail closed to
+    // the login page instead of crashing the whole site with a raw 500.
+    console.error("Failed to verify session cookie", err);
+  }
   if (session) {
     return NextResponse.next();
   }
