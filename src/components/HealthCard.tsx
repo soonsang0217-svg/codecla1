@@ -6,8 +6,8 @@ export default function HealthCard({ health }: { health: HealthSnapshot | null }
     !health ||
     (health.sleepDurationMinutes == null &&
       health.sleepScore == null &&
-      health.sleepPatternChange == null &&
-      health.heartRate == null)
+      health.heartRate == null &&
+      health.heartRateVariability == null)
   ) {
     return (
       <p className="rounded-xl border border-dashed border-slate-300 p-4 text-center text-sm text-slate-400">
@@ -38,10 +38,10 @@ export default function HealthCard({ health }: { health: HealthSnapshot | null }
           <p className="mt-1 text-xl font-bold text-slate-900">{health.heartRate} bpm</p>
         </div>
       )}
-      {health.sleepPatternChange && (
+      {health.heartRateVariability != null && (
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <p className="text-sm font-semibold text-slate-900">수면 패턴 변화</p>
-          <p className="mt-1 text-sm text-slate-700">{health.sleepPatternChange}</p>
+          <p className="text-sm font-semibold text-slate-900">심박 변이</p>
+          <p className="mt-1 text-xl font-bold text-slate-900">{health.heartRateVariability} ms</p>
         </div>
       )}
       {health.recordedAt && (

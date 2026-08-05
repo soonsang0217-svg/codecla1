@@ -30,9 +30,9 @@ export async function POST(request: NextRequest) {
       sleepDurationMinutes:
         typeof body.sleepDurationMinutes === "number" ? body.sleepDurationMinutes : null,
       sleepScore: typeof body.sleepScore === "number" ? body.sleepScore : null,
-      sleepPatternChange:
-        typeof body.sleepPatternChange === "string" ? body.sleepPatternChange : null,
       heartRate: typeof body.heartRate === "number" ? body.heartRate : null,
+      heartRateVariability:
+        typeof body.heartRateVariability === "number" ? body.heartRateVariability : null,
       recordedAt: typeof body.recordedAt === "string" ? body.recordedAt : null,
     });
     return NextResponse.json({ ok: true, snapshot });
