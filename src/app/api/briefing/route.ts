@@ -7,7 +7,6 @@ import { getTopHeadlines } from "@/lib/news";
 import { getCommuteInfo } from "@/lib/directions";
 import { getSettings } from "@/lib/config";
 import { getTodayRangeInKst } from "@/lib/timezone";
-import { getLatestHealth } from "@/lib/health";
 
 export async function GET() {
   try {
@@ -16,12 +15,11 @@ export async function GET() {
 
     const { startOfDay, endOfDay } = getTodayRangeInKst();
 
-    const [events, tasks, stocks, news, health] = await Promise.all([
+    const [events, tasks, stocks, news] = await Promise.all([
       listEvents(auth, startOfDay.toISOString(), endOfDay.toISOString()),
       listTasks(auth, false),
       getStockQuotes(settings.stockSymbols),
       getTopHeadlines(settings.newsCountry, settings.newsQuery),
-      getLatestHealth(),
     ]);
 
     const eventsWithCommute = await Promise.all(
@@ -44,7 +42,6 @@ export async function GET() {
       tasks,
       stocks,
       news,
-      health,
       homeAddressConfigured: !!settings.homeAddress,
     });
   } catch (err) {

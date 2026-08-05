@@ -7,7 +7,6 @@ import type { BriefingEvent, BriefingResponse, BriefingTask } from "@/lib/types"
 import { formatDueDate, formatTodayKorean } from "@/lib/format";
 import EventCard from "@/components/EventCard";
 import StockCard from "@/components/StockCard";
-import HealthCard from "@/components/HealthCard";
 import EventFormModal, { type EventFormValues } from "@/components/EventFormModal";
 import TaskFormModal, { type TaskFormValues } from "@/components/TaskFormModal";
 
@@ -238,11 +237,6 @@ export default function BriefingPage() {
               </div>
             ))}
           </div>
-        </section>
-
-        <section>
-          <h2 className="mb-3 text-lg font-bold text-slate-900">건강</h2>
-          <HealthCard health={data?.health ?? null} />
         </section>
 
         <section>

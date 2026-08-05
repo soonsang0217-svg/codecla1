@@ -10,10 +10,6 @@ const PUBLIC_PATHS = [
   "/icon-192.png",
   "/icon-512.png",
   "/favicon.ico",
-  // Called by an iOS Shortcuts automation, not the browser — authenticated
-  // with its own bearer token (HEALTH_INGEST_TOKEN) instead of the session
-  // cookie. See src/app/api/health/ingest/route.ts.
-  "/api/health/ingest",
 ];
 
 function isPublic(pathname: string): boolean {

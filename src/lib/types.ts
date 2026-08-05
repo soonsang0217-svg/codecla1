@@ -1,7 +1,6 @@
 import type { CommuteInfo } from "./directions";
 import type { StockQuote } from "./stocks";
 import type { NewsItem } from "./news";
-import type { HealthSnapshot } from "./health";
 
 export interface BriefingEventTime {
   dateTime?: string | null;
@@ -32,8 +31,7 @@ export interface BriefingResponse {
   tasks: BriefingTask[];
   stocks: StockQuote[];
   news: NewsItem[];
-  health: HealthSnapshot | null;
   homeAddressConfigured: boolean;
 }
 
-export type { CommuteInfo, StockQuote, NewsItem, HealthSnapshot };
+export type { CommuteInfo, StockQuote, NewsItem };
