@@ -132,6 +132,12 @@ export default function BriefingPage() {
             새로고침
           </button>
           <Link
+            href="/calendar"
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
+          >
+            캘린더
+          </Link>
+          <Link
             href="/settings"
             className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
           >

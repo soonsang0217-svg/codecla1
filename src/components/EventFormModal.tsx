@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { BriefingEvent } from "@/lib/types";
 import { toDateTimeLocalInput } from "@/lib/format";
+import LocationAutocomplete from "./LocationAutocomplete";
 
 export interface EventFormValues {
   summary: string;
@@ -15,16 +16,16 @@ export interface EventFormValues {
 
 interface Props {
   initial?: BriefingEvent | null;
+  /** Date to prefill the start/end time on for a new event (defaults to today). */
+  defaultDate?: Date;
   onClose: () => void;
   onSubmit: (values: EventFormValues) => Promise<void>;
   onDelete?: () => Promise<void>;
 }
 
-function defaultTimes() {
-  const now = new Date();
-  const start = new Date(now);
-  start.setMinutes(0, 0, 0);
-  start.setHours(start.getHours() + 1);
+function defaultTimes(base?: Date) {
+  const start = base ? new Date(base) : new Date();
+  start.setHours(new Date().getHours() + 1, 0, 0, 0);
   const end = new Date(start);
   end.setHours(end.getHours() + 1);
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -35,8 +36,8 @@ function defaultTimes() {
   return { start: toLocal(start), end: toLocal(end) };
 }
 
-export default function EventFormModal({ initial, onClose, onSubmit, onDelete }: Props) {
-  const defaults = defaultTimes();
+export default function EventFormModal({ initial, defaultDate, onClose, onSubmit, onDelete }: Props) {
+  const defaults = defaultTimes(defaultDate);
   const [summary, setSummary] = useState(initial?.summary ?? "");
   const [location, setLocation] = useState(initial?.location ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
@@ -91,12 +92,10 @@ export default function EventFormModal({ initial, onClose, onSubmit, onDelete }:
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-600">장소</label>
-            <input
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              placeholder="예: 강남역 2번 출구"
-            />
+            <LocationAutocomplete value={location} onChange={setLocation} />
+            <p className="mt-1 text-xs text-slate-400">
+              검색 결과에서 선택하면 이동 경로 계산이 더 정확해집니다.
+            </p>
           </div>
           <label className="flex items-center gap-2 text-sm text-slate-600">
             <input type="checkbox" checked={allDay} onChange={(e) => setAllDay(e.target.checked)} />

@@ -36,12 +36,46 @@ function computeDepartureBy(
 
 interface KakaoKeywordDoc {
   place_name: string;
+  address_name?: string;
+  road_address_name?: string;
   x: string; // lng
   y: string; // lat
 }
 
 interface KakaoKeywordResponse {
   documents: KakaoKeywordDoc[];
+}
+
+export interface PlaceSuggestion {
+  name: string;
+  address: string;
+  lat: number;
+  lng: number;
+}
+
+/** Live search-as-you-type suggestions for the event location field. */
+export async function searchPlaceSuggestions(query: string, limit = 5): Promise<PlaceSuggestion[]> {
+  const apiKey = process.env.KAKAO_REST_API_KEY;
+  if (!apiKey || !query.trim()) return [];
+
+  try {
+    const res = await fetch(
+      `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(query)}&size=${limit}`,
+      { headers: { Authorization: `KakaoAK ${apiKey}` }, cache: "no-store" }
+    );
+    if (!res.ok) return [];
+
+    const data = (await res.json()) as KakaoKeywordResponse;
+    return (data.documents ?? []).map((doc) => ({
+      name: doc.place_name,
+      address: doc.road_address_name || doc.address_name || "",
+      lat: Number(doc.y),
+      lng: Number(doc.x),
+    }));
+  } catch (err) {
+    console.error("Failed to fetch place suggestions", err);
+    return [];
+  }
 }
 
 interface KakaoAddressDoc {

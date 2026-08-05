@@ -53,12 +53,20 @@ export default function SettingsPage() {
     <main className="mx-auto w-full max-w-lg flex-1 p-4 sm:p-8">
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold text-slate-900">설정</h1>
-        <Link
-          href="/briefing"
-          className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
-        >
-          브리핑으로
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/calendar"
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
+          >
+            캘린더
+          </Link>
+          <Link
+            href="/briefing"
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
+          >
+            브리핑으로
+          </Link>
+        </div>
       </div>
 
       <form onSubmit={handleSave} className="space-y-6 rounded-2xl bg-white p-6 shadow-sm">
