@@ -3,9 +3,10 @@ import { getKV, setKV } from "./db";
 export interface HealthSnapshot {
   sleepDurationMinutes: number | null;
   sleepScore: number | null;
-  heartRate: number | null;
-  /** Heart rate variability (SDNN), in milliseconds. */
-  heartRateVariability: number | null;
+  /** Today's heart rate readings (bpm), oldest first. Order-based, not evenly timed. */
+  heartRateSeries: number[] | null;
+  /** Today's heart rate variability / SDNN readings (ms), oldest first. */
+  heartRateVariabilitySeries: number[] | null;
   /** When Apple Health recorded these readings (from the Shortcut), ISO string. */
   recordedAt: string | null;
   /** When our server last received an update, ISO string. */
@@ -15,8 +16,8 @@ export interface HealthSnapshot {
 export interface HealthSnapshotInput {
   sleepDurationMinutes?: number | null;
   sleepScore?: number | null;
-  heartRate?: number | null;
-  heartRateVariability?: number | null;
+  heartRateSeries?: number[] | null;
+  heartRateVariabilitySeries?: number[] | null;
   recordedAt?: string | null;
 }
 
@@ -31,8 +32,9 @@ export async function saveHealthSnapshot(input: HealthSnapshotInput): Promise<He
   const next: HealthSnapshot = {
     sleepDurationMinutes: input.sleepDurationMinutes ?? existing?.sleepDurationMinutes ?? null,
     sleepScore: input.sleepScore ?? existing?.sleepScore ?? null,
-    heartRate: input.heartRate ?? existing?.heartRate ?? null,
-    heartRateVariability: input.heartRateVariability ?? existing?.heartRateVariability ?? null,
+    heartRateSeries: input.heartRateSeries ?? existing?.heartRateSeries ?? null,
+    heartRateVariabilitySeries:
+      input.heartRateVariabilitySeries ?? existing?.heartRateVariabilitySeries ?? null,
     recordedAt: input.recordedAt ?? existing?.recordedAt ?? null,
     updatedAt: new Date().toISOString(),
   };

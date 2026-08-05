@@ -1,5 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
-import { saveHealthSnapshot, type HealthSnapshotInput } from "@/lib/health";
+import { saveHealthSnapshot } from "@/lib/health";
+
+interface RawHealthPayload {
+  sleepDurationMinutes?: number;
+  sleepScore?: number;
+  recordedAt?: string;
+  // Shortcuts flattens a list magic variable dropped into a text field into a
+  // single "\n"-joined string — one raw sample value per line.
+  heartRateRaw?: string;
+  heartRateVariabilityRaw?: string;
+}
+
+function parseRawSeries(raw: unknown): number[] | null {
+  if (typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+
+  const values = trimmed
+    .split("\n")
+    .map((line) => Number(line.trim()))
+    .filter((n) => Number.isFinite(n));
+
+  return values.length > 0 ? values : null;
+}
 
 /**
  * Called by an iOS/iPadOS Shortcuts automation (not the browser), so it's
@@ -25,21 +48,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "invalid JSON body" }, { status: 400 });
   }
 
-  // Logged in full so we can see exactly what shape Shortcuts sends for
-  // fields we don't have strict parsing for yet (e.g. raw sample arrays) —
-  // check this in Vercel's Runtime Logs.
   console.log("Health ingest payload:", JSON.stringify(rawBody));
 
-  const body = (rawBody ?? {}) as HealthSnapshotInput;
+  const body = (rawBody ?? {}) as RawHealthPayload;
 
   try {
     const snapshot = await saveHealthSnapshot({
       sleepDurationMinutes:
         typeof body.sleepDurationMinutes === "number" ? body.sleepDurationMinutes : null,
       sleepScore: typeof body.sleepScore === "number" ? body.sleepScore : null,
-      heartRate: typeof body.heartRate === "number" ? body.heartRate : null,
-      heartRateVariability:
-        typeof body.heartRateVariability === "number" ? body.heartRateVariability : null,
+      heartRateSeries: parseRawSeries(body.heartRateRaw),
+      heartRateVariabilitySeries: parseRawSeries(body.heartRateVariabilityRaw),
       recordedAt: typeof body.recordedAt === "string" ? body.recordedAt : null,
     });
     return NextResponse.json({ ok: true, snapshot });
