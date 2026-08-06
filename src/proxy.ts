@@ -15,6 +15,9 @@ const PUBLIC_PATHS = [
 function isPublic(pathname: string): boolean {
   if (PUBLIC_PATHS.includes(pathname)) return true;
   if (pathname.startsWith("/api/auth/")) return true;
+  // Vercel Cron has no session cookie; the route itself checks the
+  // CRON_SECRET bearer token instead, so it must bypass the cookie check.
+  if (pathname.startsWith("/api/cron/")) return true;
   return false;
 }
 

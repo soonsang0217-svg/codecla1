@@ -20,6 +20,8 @@
 - **현재 위치 기준 날씨/경로** — 페이지를 열 때마다 브라우저 위치 권한을 요청해 실제 현재
   위치를 기준으로 날씨와 이동 경로를 계산. 권한을 거부하거나 사용할 수 없으면 설정에 등록한
   집 주소로 자동 전환. "오늘 날씨" 옆 배지에 현재 기준이 되는 주소를 함께 표시 (Kakao 역지오코딩)
+- **매일 아침 이메일 브리핑** — 매일 07:00(KST)에 그날의 일정/할 일/날씨/주식/주요 뉴스를
+  정리한 메일을 자동 발송 (Vercel Cron + Resend, 브라우저를 열지 않아도 도착)
 - Google 계정으로 로그인(허용된 이메일만), 세션 쿠키로 이후 접근 보호
 - 아이패드 홈 화면에 추가하면 앱처럼 아이콘으로 실행 가능 (PWA manifest)
 
@@ -54,6 +56,7 @@
 | 뉴스 | 없음 (Google 뉴스 RSS, 키/가입 불필요) | - |
 | 이동 경로 | [Kakao Developers](https://developers.kakao.com) | 앱 생성 → Local + 길찾기(Directions) 제품 활성화 → REST API 키 |
 | 날씨 | 없음 (Open-Meteo, 키/가입 불필요) | 집 주소(`HOME_ADDRESS`)와 `KAKAO_REST_API_KEY`가 있어야 좌표 변환 후 조회됩니다 |
+| 이메일 브리핑 | [resend.com](https://resend.com) 무료 가입 | 받을 이메일 주소(예: `soonsang0217@naver.com`)로 가입 → API 키 |
 
 Google OAuth 클라이언트의 **승인된 리디렉션 URI**는 3단계에서 Vercel이 발급해주는 주소를
 알아야 정확히 채울 수 있으므로, Google 클라이언트 생성은 4단계 이후에 마무리해도 됩니다
@@ -72,6 +75,8 @@ Google OAuth 클라이언트의 **승인된 리디렉션 URI**는 3단계에서 
    - `ALLOWED_EMAIL`, `SESSION_SECRET`(`openssl rand -base64 32` 또는 아무 긴 무작위 문자열)
    - `FINNHUB_API_KEY`, `STOCK_SYMBOLS`, `NEWS_COUNTRY`, `NEWS_QUERY`
    - `KAKAO_REST_API_KEY`, `HOME_ADDRESS`
+   - `RESEND_API_KEY`, `BRIEFING_EMAIL_TO`(=`soonsang0217@naver.com`), `CRON_SECRET`(`openssl
+     rand -base64 32`) — 매일 아침 이메일 브리핑용. 비워두면 이메일 발송 기능만 비활성화됩니다
 4. **Deploy** 클릭 → 몇 분 내 `https://<프로젝트명>.vercel.app` 주소 발급
 5. Google Cloud Console로 돌아가 OAuth 클라이언트의 **승인된 리디렉션 URI**를 실제 Vercel
    주소(`https://<프로젝트명>.vercel.app/api/auth/google/callback`)로 정확히 맞춰줍니다
@@ -91,6 +96,24 @@ Google OAuth 클라이언트의 **승인된 리디렉션 URI**는 3단계에서 
 > **알려진 제한사항**: Kakao의 공개 REST API는 자동차 길찾기만 제공하며, 대중교통(버스/지하철)
 > 경로 API는 별도 상용 계약이 필요합니다. 앱은 자동차 기준 예상 시간을 보여주고, 대중교통 경로는
 > "지도에서 보기" 링크로 카카오맵을 열어 직접 확인하도록 안내합니다.
+
+### 5) 매일 아침 이메일 브리핑 설정 (선택)
+
+1. [resend.com](https://resend.com)에서 **받을 이메일 주소로 직접 가입** (예: `soonsang0217@naver.com`).
+   무료 플랜은 도메인 인증 없이는 가입할 때 쓴 이메일 주소로만 발송할 수 있는데, 정확히 이
+   앱이 필요로 하는 용도와 맞습니다.
+2. 가입 후 **API Keys**에서 키 생성 → Vercel 프로젝트 환경변수에 `RESEND_API_KEY`로 저장
+3. `BRIEFING_EMAIL_TO`에 받을 주소(`soonsang0217@naver.com`) 입력
+4. `CRON_SECRET`에 임의의 긴 문자열 입력 (`openssl rand -base64 32`) — Vercel이 이 값을 설정된
+   프로젝트에 한해 자동으로 크론 요청에 `Authorization: Bearer <값>` 헤더로 실어 보내므로,
+   별도 설정 없이 그 자체로 "Vercel의 정식 크론 요청만 허용"하는 인증 역할을 합니다
+5. 저장소에 포함된 `vercel.json`(`0 22 * * *` = 매일 07:00 KST)이 배포 시 자동으로 Vercel Cron
+   Job을 등록합니다 — 추가로 할 일 없음. Vercel 대시보드의 프로젝트 **Settings > Cron Jobs**에서
+   등록 여부와 실행 로그를 확인할 수 있습니다
+
+> **참고**: Vercel 무료(Hobby) 플랜의 크론 작업은 예약된 시각 근처에서 실행되지만 정확히
+> 그 분(minute)에 실행된다고 보장되지는 않습니다(최대 1시간 이내 오차 가능). 정확한 시각이
+> 중요하다면 Vercel Pro 플랜에서 더 정밀한 스케줄링을 제공합니다.
 
 ## 대안 배포: Docker로 직접 호스팅
 
@@ -118,8 +141,8 @@ npm run dev
 
 `.env.example` 참고. 필수: `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`,
 `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`, `SESSION_SECRET`.
-나머지(주식/뉴스/경로 API 키, 허용 이메일)는 비워두면 해당 기능만 비활성화된 채로 앱은
-정상 동작합니다.
+나머지(주식/뉴스/경로/이메일 API 키, 허용 이메일)는 비워두면 해당 기능만 비활성화된 채로
+앱은 정상 동작합니다.
 
 ## 프로젝트 구조
 
@@ -137,7 +160,10 @@ src/
       places/          장소 자동완성 (Kakao 검색 프록시)
       briefing/        일간 브리핑 집계 API
       settings/        사용자 설정 조회/저장
-  lib/                 Google API, 외부 데이터 소스, 세션, Upstash, 타임존 등 핵심 로직
+      cron/
+        daily-briefing/  매일 07시(KST) Vercel Cron이 호출하는 이메일 발송 엔드포인트
+  lib/                 Google API, 외부 데이터 소스, 세션, Upstash, 타임존, 이메일 등 핵심 로직
   components/          일정/할 일 작성-수정 모달, 카드 UI, 장소 자동완성
   proxy.ts             인증 게이팅 (로그인 안 된 요청 차단)
+vercel.json             Vercel Cron 스케줄 정의 (매일 아침 이메일 브리핑)
 ```
