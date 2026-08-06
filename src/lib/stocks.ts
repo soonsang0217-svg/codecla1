@@ -7,6 +7,9 @@ export interface StockQuote {
   change: number | null;
   changePercent: number | null;
   previousClose: number | null;
+  /** Today's low/high, when the source provides them — powers the day-range bar. */
+  dayLow?: number | null;
+  dayHigh?: number | null;
   error?: string;
 }
 
@@ -17,6 +20,8 @@ interface FinnhubQuote {
   c: number; // current price
   d: number; // change
   dp: number; // percent change
+  h: number; // day high
+  l: number; // day low
   pc: number; // previous close
 }
 
@@ -43,6 +48,8 @@ async function fetchFinnhubQuote(symbol: string, apiKey: string): Promise<StockQ
       change: data.d,
       changePercent: data.dp,
       previousClose: data.pc,
+      dayLow: data.l || null,
+      dayHigh: data.h || null,
     };
     await setKV(cacheKey, quote, CACHE_TTL_SECONDS);
     return quote;
@@ -69,6 +76,10 @@ interface NaverBasicResponse {
   compareToPreviousClosePrice: string; // comma-formatted, unsigned
   compareToPreviousPrice: NaverDirection;
   fluctuationsRatio: string; // percent, unsigned
+  // Not confirmed present on this endpoint — parsed defensively; the day-range
+  // bar just won't render for a quote when these come back undefined.
+  highPrice?: string;
+  lowPrice?: string;
 }
 
 function parseNaverNumber(value: string): number {
@@ -104,6 +115,8 @@ async function fetchNaverQuote(code: string): Promise<StockQuote> {
       change,
       changePercent,
       previousClose: price - change,
+      dayLow: data.lowPrice ? parseNaverNumber(data.lowPrice) : null,
+      dayHigh: data.highPrice ? parseNaverNumber(data.highPrice) : null,
     };
     await setKV(cacheKey, quote, CACHE_TTL_SECONDS);
     return quote;

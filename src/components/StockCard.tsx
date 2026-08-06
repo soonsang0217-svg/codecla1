@@ -1,4 +1,5 @@
 import type { StockQuote } from "@/lib/types";
+import DayRangeBar from "./DayRangeBar";
 
 export default function StockCard({ quote }: { quote: StockQuote }) {
   if (quote.error || quote.price == null) {
@@ -24,6 +25,9 @@ export default function StockCard({ quote }: { quote: StockQuote }) {
         {quote.change?.toFixed(2)} ({sign}
         {quote.changePercent?.toFixed(2)}%)
       </p>
+      {quote.dayLow != null && quote.dayHigh != null && (
+        <DayRangeBar low={quote.dayLow} high={quote.dayHigh} current={quote.price} up={up} />
+      )}
     </div>
   );
 }
