@@ -192,8 +192,19 @@ async function fetchRegionInfo(lat: number, lng: number): Promise<RegionInfo | n
   if (!apiKey) return null;
 
   const cacheKey = `coord2address:${lat.toFixed(3)}:${lng.toFixed(3)}`;
-  const cached = await getKV<RegionInfo>(cacheKey);
-  if (cached) return cached;
+  // Cached entries may predate a field being added to RegionInfo (region3
+  // was added after this cache was already in use) — normalize on read so
+  // an old cached value can't hand back `undefined` for a field callers
+  // treat as always a string.
+  const cached = await getKV<Partial<RegionInfo>>(cacheKey);
+  if (cached?.address && cached?.region1) {
+    return {
+      address: cached.address,
+      region1: cached.region1,
+      region2: cached.region2 ?? "",
+      region3: cached.region3 ?? "",
+    };
+  }
 
   try {
     const res = await fetch(
