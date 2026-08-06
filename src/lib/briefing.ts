@@ -33,9 +33,13 @@ export async function getBriefingData(currentLocation: GeoPoint | null): Promise
 
   const { startOfDay, endOfDay } = getTodayRangeInKst();
 
-  const [events, tasks, stocks, weather, locationLabel] = await Promise.all([
+  const [events, tasks, allTasks, stocks, weather, locationLabel] = await Promise.all([
     listEvents(auth, startOfDay.toISOString(), endOfDay.toISOString()),
+    // Kept as its own call (rather than filtering the showCompleted:true
+    // list below) so a long completed-tasks history can never crowd an
+    // open task out of the 100-item API cap.
     listTasks(auth, false),
+    listTasks(auth, true),
     getStockQuotes(settings.stockSymbols),
     currentLocation
       ? getWeather(currentLocation.lat, currentLocation.lng)
@@ -44,6 +48,10 @@ export async function getBriefingData(currentLocation: GeoPoint | null): Promise
       ? reverseGeocode(currentLocation.lat, currentLocation.lng)
       : Promise.resolve(settings.homeAddress || null),
   ]);
+
+  const completedTasks = allTasks
+    .filter((task) => task.status === "completed")
+    .sort((a, b) => new Date(b.completed ?? 0).getTime() - new Date(a.completed ?? 0).getTime());
 
   const eventsWithCommute = await Promise.all(
     events.map(async (event) => {
@@ -68,6 +76,7 @@ export async function getBriefingData(currentLocation: GeoPoint | null): Promise
     date: startOfDay.toISOString(),
     events: eventsWithCommute,
     tasks,
+    completedTasks,
     stocks,
     weather,
     homeAddressConfigured: !!settings.homeAddress,

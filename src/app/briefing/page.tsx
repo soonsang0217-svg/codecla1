@@ -42,6 +42,7 @@ export default function BriefingPage() {
   const [taskModal, setTaskModal] = useState<TaskModalState>("closed");
   const [sendingEmail, setSendingEmail] = useState(false);
   const [emailMessage, setEmailMessage] = useState<{ text: string; error: boolean } | null>(null);
+  const [showCompletedTasks, setShowCompletedTasks] = useState(false);
 
   const load = useCallback(async () => {
     setError(null);
@@ -319,6 +320,47 @@ export default function BriefingPage() {
               </div>
             ))}
           </div>
+
+          {data && data.completedTasks.length > 0 && (
+            <div className="mt-4">
+              <button
+                onClick={() => setShowCompletedTasks((v) => !v)}
+                className="text-sm font-medium text-slate-500 hover:text-slate-700"
+              >
+                {showCompletedTasks
+                  ? "완료된 할 일 숨기기"
+                  : `완료된 할 일 보기 (${data.completedTasks.length})`}
+              </button>
+              {showCompletedTasks && (
+                <div className="mt-2 space-y-2">
+                  {data.completedTasks.map((task) => (
+                    <div
+                      key={task.id}
+                      className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3"
+                    >
+                      <input
+                        type="checkbox"
+                        checked
+                        onChange={() => toggleTaskComplete(task)}
+                        className="h-5 w-5 shrink-0"
+                        title="체크 해제하면 할 일 목록으로 되돌립니다"
+                      />
+                      <button onClick={() => setTaskModal({ task })} className="flex-1 text-left">
+                        <p className="text-sm font-medium text-slate-400 line-through">
+                          {task.title}
+                        </p>
+                        {task.completed && (
+                          <p className="text-xs text-slate-400">
+                            완료: {formatDueDate(task.completed)}
+                          </p>
+                        )}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </section>
 
         <section>

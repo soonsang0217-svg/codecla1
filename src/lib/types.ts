@@ -24,12 +24,16 @@ export interface BriefingTask {
   notes?: string | null;
   due?: string | null;
   status?: string | null;
+  /** RFC3339 completion timestamp, present only once status is "completed". */
+  completed?: string | null;
 }
 
 export interface BriefingResponse {
   date: string;
   events: BriefingEvent[];
   tasks: BriefingTask[];
+  /** Completed tasks, most recently completed first — for undoing accidental checks. */
+  completedTasks: BriefingTask[];
   stocks: StockQuote[];
   weather: WeatherInfo | null;
   homeAddressConfigured: boolean;

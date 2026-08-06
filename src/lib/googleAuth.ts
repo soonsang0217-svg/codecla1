@@ -20,11 +20,20 @@ export function createOAuthClient(): OAuth2Client {
   );
 }
 
-export function getAuthUrl(): string {
+/**
+ * `prompt: "consent"` forces Google's full permission screen every single
+ * time, which is only actually necessary once — to obtain a refresh_token
+ * on the very first authorization. Once we already have one stored, logging
+ * back in only needs to re-confirm identity for the session cookie, so we
+ * omit prompt entirely and let Google skip the consent/account screens
+ * whenever it can (already-granted scopes, active Google session).
+ */
+export async function getAuthUrl(): Promise<string> {
   const client = createOAuthClient();
+  const alreadyConnected = await isConnected();
   return client.generateAuthUrl({
     access_type: "offline",
-    prompt: "consent",
+    ...(alreadyConnected ? {} : { prompt: "consent" }),
     scope: SCOPES,
   });
 }
