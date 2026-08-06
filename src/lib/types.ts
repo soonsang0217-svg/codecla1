@@ -34,6 +34,7 @@ export interface BriefingResponse {
   weather: WeatherInfo | null;
   homeAddressConfigured: boolean;
   locationSource: "current" | "home";
+  locationLabel: string | null;
 }
 
 export type { CommuteInfo, StockQuote, NewsItem, WeatherInfo };

@@ -3,7 +3,13 @@ import { requireGoogleClient, handleApiError } from "@/lib/apiAuth";
 import { listEvents } from "@/lib/googleCalendar";
 import { listTasks } from "@/lib/googleTasks";
 import { getStockQuotes } from "@/lib/stocks";
-import { getCommuteInfo, getCommuteInfoFromPoint, geocodeAddress, type GeoPoint } from "@/lib/directions";
+import {
+  getCommuteInfo,
+  getCommuteInfoFromPoint,
+  geocodeAddress,
+  reverseGeocode,
+  type GeoPoint,
+} from "@/lib/directions";
 import { getWeather, type WeatherInfo } from "@/lib/weather";
 import { getSettings } from "@/lib/config";
 import { getTodayRangeInKst } from "@/lib/timezone";
@@ -34,13 +40,16 @@ export async function GET(request: Request) {
 
     const { startOfDay, endOfDay } = getTodayRangeInKst();
 
-    const [events, tasks, stocks, weather] = await Promise.all([
+    const [events, tasks, stocks, weather, locationLabel] = await Promise.all([
       listEvents(auth, startOfDay.toISOString(), endOfDay.toISOString()),
       listTasks(auth, false),
       getStockQuotes(settings.stockSymbols),
       currentLocation
         ? getWeather(currentLocation.lat, currentLocation.lng)
         : getHomeWeather(settings.homeAddress),
+      currentLocation
+        ? reverseGeocode(currentLocation.lat, currentLocation.lng)
+        : Promise.resolve(settings.homeAddress || null),
     ]);
 
     const eventsWithCommute = await Promise.all(
@@ -63,6 +72,7 @@ export async function GET(request: Request) {
       weather,
       homeAddressConfigured: !!settings.homeAddress,
       locationSource: currentLocation ? "current" : "home",
+      locationLabel,
     });
   } catch (err) {
     return handleApiError(err);

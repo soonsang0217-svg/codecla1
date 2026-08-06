@@ -149,6 +149,44 @@ export async function geocodeAddress(query: string): Promise<GeoPoint | null> {
   return geocode(query, apiKey);
 }
 
+interface KakaoCoord2AddressDoc {
+  address?: { address_name: string };
+  road_address?: { address_name: string };
+}
+
+interface KakaoCoord2AddressResponse {
+  documents: KakaoCoord2AddressDoc[];
+}
+
+/** Reverse-geocodes coordinates (e.g. live browser geolocation) to a display address. */
+export async function reverseGeocode(lat: number, lng: number): Promise<string | null> {
+  const apiKey = process.env.KAKAO_REST_API_KEY;
+  if (!apiKey) return null;
+
+  const cacheKey = `reverse-geocode:${lat.toFixed(3)}:${lng.toFixed(3)}`;
+  const cached = await getKV<string>(cacheKey);
+  if (cached) return cached;
+
+  try {
+    const res = await fetch(
+      `https://dapi.kakao.com/v2/local/geo/coord2address.json?x=${lng}&y=${lat}`,
+      { headers: { Authorization: `KakaoAK ${apiKey}` }, cache: "no-store" }
+    );
+    if (!res.ok) throw new Error(`Kakao coord2address returned ${res.status}`);
+
+    const data = (await res.json()) as KakaoCoord2AddressResponse;
+    const doc = data.documents?.[0];
+    const address = doc?.road_address?.address_name || doc?.address?.address_name;
+    if (!address) return null;
+
+    await setKV(cacheKey, address, GEOCODE_CACHE_TTL_SECONDS);
+    return address;
+  } catch (err) {
+    console.error("Failed to reverse geocode", err);
+    return null;
+  }
+}
+
 async function geocode(query: string, apiKey: string): Promise<GeoPoint | null> {
   const cacheKey = `geocode:${query}`;
   const cached = await getKV<GeoPoint>(cacheKey);
