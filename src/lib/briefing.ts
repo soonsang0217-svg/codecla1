@@ -48,6 +48,13 @@ export async function getBriefingData(currentLocation: GeoPoint | null): Promise
   const eventsWithCommute = await Promise.all(
     events.map(async (event) => {
       if (!event.location) return { ...event, commute: null };
+
+      // No point showing directions to an event that already started —
+      // skip the geocode/route lookup entirely once its start time is past.
+      const startIso = event.start?.dateTime;
+      const hasStarted = !!startIso && new Date(startIso).getTime() <= Date.now();
+      if (hasStarted) return { ...event, commute: null };
+
       const commute = currentLocation
         ? await getCommuteInfoFromPoint(currentLocation, event.location, event.start?.dateTime)
         : settings.homeAddress

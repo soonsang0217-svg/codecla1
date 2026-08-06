@@ -46,6 +46,13 @@ function pm25Label(pm25: number): string {
   return "매우 나쁨";
 }
 
+// With `timezone=Asia/Seoul` alone, Open-Meteo returns naive local
+// timestamps like "2026-08-06T16:00" (no UTC offset). `new Date(...)` on a
+// server running in another timezone (Vercel = UTC) parses that string as
+// if it *were* UTC, silently shifting every comparison against the real
+// "now" by 9 hours. Requesting `timeformat=unixtime` instead returns
+// unambiguous epoch seconds, so parsing is correct no matter where this
+// code runs.
 interface OpenMeteoForecast {
   daily?: {
     weather_code?: number[];
@@ -54,7 +61,7 @@ interface OpenMeteoForecast {
     precipitation_probability_max?: number[];
   };
   hourly?: {
-    time?: string[];
+    time?: number[]; // unix seconds (timeformat=unixtime)
     weather_code?: number[];
     precipitation_probability?: number[];
   };
@@ -62,17 +69,17 @@ interface OpenMeteoForecast {
 
 interface OpenMeteoAirQuality {
   hourly?: {
-    time?: string[];
+    time?: number[]; // unix seconds (timeformat=unixtime)
     pm2_5?: number[];
     pm10?: number[];
   };
 }
 
-function findNearestIndex(times: string[], now: Date): number {
+function findNearestIndex(times: number[], nowEpochSeconds: number): number {
   let closestIndex = 0;
   let smallestDiff = Infinity;
   for (let i = 0; i < times.length; i++) {
-    const diff = Math.abs(new Date(times[i]).getTime() - now.getTime());
+    const diff = Math.abs(times[i] - nowEpochSeconds);
     if (diff < smallestDiff) {
       smallestDiff = diff;
       closestIndex = i;
@@ -81,14 +88,13 @@ function findNearestIndex(times: string[], now: Date): number {
   return closestIndex;
 }
 
-function findRainStartTime(hourly: OpenMeteoForecast["hourly"], now: Date): string | null {
+function findRainStartTime(hourly: OpenMeteoForecast["hourly"], nowEpochSeconds: number): string | null {
   const times = hourly?.time ?? [];
   const codes = hourly?.weather_code ?? [];
   const probabilities = hourly?.precipitation_probability ?? [];
 
   for (let i = 0; i < times.length; i++) {
-    const time = new Date(times[i]);
-    if (time < now) continue;
+    if (times[i] < nowEpochSeconds) continue;
 
     const code = codes[i];
     const probability = probabilities[i];
@@ -97,7 +103,11 @@ function findRainStartTime(hourly: OpenMeteoForecast["hourly"], now: Date): stri
       (probability != null && probability >= RAIN_PROBABILITY_THRESHOLD);
 
     if (rainLikely) {
-      return time.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
+      return new Date(times[i] * 1000).toLocaleTimeString("ko-KR", {
+        hour: "2-digit",
+        minute: "2-digit",
+        timeZone: "Asia/Seoul",
+      });
     }
   }
   return null;
@@ -112,14 +122,14 @@ export async function getWeather(lat: number, lng: number): Promise<WeatherInfo 
     const [forecastRes, airRes] = await Promise.all([
       fetch(
         `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}` +
-          `&timezone=Asia%2FSeoul&forecast_days=1` +
+          `&timezone=Asia%2FSeoul&timeformat=unixtime&forecast_days=1` +
           `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max` +
           `&hourly=weather_code,precipitation_probability`,
         { cache: "no-store" }
       ),
       fetch(
         `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lng}` +
-          `&timezone=Asia%2FSeoul&forecast_days=1&hourly=pm2_5,pm10`,
+          `&timezone=Asia%2FSeoul&timeformat=unixtime&forecast_days=1&hourly=pm2_5,pm10`,
         { cache: "no-store" }
       ),
     ]);
@@ -129,7 +139,7 @@ export async function getWeather(lat: number, lng: number): Promise<WeatherInfo 
 
     const dailyCode = forecast.daily?.weather_code?.[0] ?? 0;
     const { icon, description } = describeWeatherCode(dailyCode);
-    const now = new Date();
+    const nowEpochSeconds = Math.floor(Date.now() / 1000);
 
     const weather: WeatherInfo = {
       icon,
@@ -137,7 +147,7 @@ export async function getWeather(lat: number, lng: number): Promise<WeatherInfo 
       tempMax: forecast.daily?.temperature_2m_max?.[0] ?? null,
       tempMin: forecast.daily?.temperature_2m_min?.[0] ?? null,
       precipitationProbability: forecast.daily?.precipitation_probability_max?.[0] ?? null,
-      rainStartTime: findRainStartTime(forecast.hourly, now),
+      rainStartTime: findRainStartTime(forecast.hourly, nowEpochSeconds),
       airQuality: null,
     };
 
@@ -145,7 +155,7 @@ export async function getWeather(lat: number, lng: number): Promise<WeatherInfo 
       const air = (await airRes.json()) as OpenMeteoAirQuality;
       const times = air.hourly?.time ?? [];
       if (times.length > 0) {
-        const idx = findNearestIndex(times, now);
+        const idx = findNearestIndex(times, nowEpochSeconds);
         const pm25 = air.hourly?.pm2_5?.[idx] ?? null;
         const pm10 = air.hourly?.pm10?.[idx] ?? null;
         weather.airQuality = { pm25, pm10, label: pm25 != null ? pm25Label(pm25) : null };

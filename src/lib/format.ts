@@ -1,5 +1,12 @@
 import type { BriefingEventTime } from "./types";
 
+// This app has a single Korea-based user, but it runs server-side rendering
+// (e.g. the cron/on-demand email) on Vercel, whose functions run in UTC —
+// without an explicit timeZone, the same code renders different wall-clock
+// times depending on where it executes. Pinning "Asia/Seoul" everywhere
+// keeps browser and server output identical.
+const KST = "Asia/Seoul";
+
 export function formatEventTime(time?: BriefingEventTime | null): string {
   if (!time) return "";
   if (time.date) return "종일";
@@ -7,6 +14,7 @@ export function formatEventTime(time?: BriefingEventTime | null): string {
     return new Date(time.dateTime).toLocaleTimeString("ko-KR", {
       hour: "2-digit",
       minute: "2-digit",
+      timeZone: KST,
     });
   }
   return "";
@@ -23,7 +31,11 @@ export function toDateTimeLocalInput(time?: BriefingEventTime | null): string {
 }
 
 export function formatClockTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
+  return new Date(iso).toLocaleTimeString("ko-KR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: KST,
+  });
 }
 
 export function formatRelativeTime(iso: string): string {
@@ -39,12 +51,12 @@ export function formatRelativeTime(iso: string): string {
   const diffHour = Math.floor(diffMin / 60);
   if (diffHour < 24) return `${diffHour}시간 전`;
 
-  return date.toLocaleDateString("ko-KR", { month: "short", day: "numeric" });
+  return date.toLocaleDateString("ko-KR", { month: "short", day: "numeric", timeZone: KST });
 }
 
 export function formatDueDate(due?: string | null): string {
   if (!due) return "";
-  return new Date(due).toLocaleDateString("ko-KR", { month: "short", day: "numeric" });
+  return new Date(due).toLocaleDateString("ko-KR", { month: "short", day: "numeric", timeZone: KST });
 }
 
 export function formatTodayKorean(iso: string): string {
@@ -53,5 +65,6 @@ export function formatTodayKorean(iso: string): string {
     month: "long",
     day: "numeric",
     weekday: "long",
+    timeZone: KST,
   });
 }

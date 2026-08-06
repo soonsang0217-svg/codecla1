@@ -70,6 +70,7 @@ function renderEvents(events: BriefingResponse["events"]): string {
                 ? ` · ${new Date(event.commute.departureBy).toLocaleTimeString("ko-KR", {
                     hour: "2-digit",
                     minute: "2-digit",
+                    timeZone: "Asia/Seoul",
                   })} 출발`
                 : ""
             }</p>`

@@ -244,8 +244,13 @@ async function drivingRoute(
   };
 }
 
-function kakaoMapLink(destination: GeoPoint): string {
-  return `https://map.kakao.com/link/to/${encodeURIComponent(destination.name)},${destination.lat},${destination.lng}`;
+// Kakao Map's link scheme places a pin (and pre-fills 길찾기) for both ends
+// only when both /from/ and /to/ segments are given; /to/ alone leaves the
+// start point for the user to type in manually.
+function kakaoMapLink(origin: GeoPoint, destination: GeoPoint): string {
+  const from = `${encodeURIComponent(origin.name)},${origin.lat},${origin.lng}`;
+  const to = `${encodeURIComponent(destination.name)},${destination.lat},${destination.lng}`;
+  return `https://map.kakao.com/link/from/${from}/to/${to}`;
 }
 
 function notFoundCommuteResult(destinationText: string): CommuteInfo {
@@ -284,7 +289,7 @@ async function buildCommuteResult(
     destination: destination.name,
     durationMinutes: route?.durationMinutes ?? null,
     distanceKm: route?.distanceKm ?? null,
-    mapLink: kakaoMapLink(destination),
+    mapLink: kakaoMapLink(origin, destination),
     note: route ? undefined : "자동차 경로를 계산하지 못했습니다. 지도에서 대중교통 경로를 확인하세요.",
     departureBy: computeDepartureBy(eventStartIso, route?.durationMinutes ?? null),
   };
