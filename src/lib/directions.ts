@@ -6,6 +6,15 @@ export interface GeoPoint {
   name: string;
 }
 
+/** Reads ?lat=&lng= off a request (GET query or POST URL) sent by the browser's live geolocation. */
+export function parseLocationFromRequest(request: Request): GeoPoint | null {
+  const { searchParams } = new URL(request.url);
+  const lat = Number(searchParams.get("lat"));
+  const lng = Number(searchParams.get("lng"));
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  return { lat, lng, name: "현재 위치" };
+}
+
 export interface CommuteInfo {
   destination: string;
   durationMinutes: number | null;

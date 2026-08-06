@@ -40,6 +40,8 @@ export default function BriefingPage() {
   const [error, setError] = useState<string | null>(null);
   const [eventModal, setEventModal] = useState<EventModalState>("closed");
   const [taskModal, setTaskModal] = useState<TaskModalState>("closed");
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [emailMessage, setEmailMessage] = useState<{ text: string; error: boolean } | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -74,6 +76,31 @@ export default function BriefingPage() {
   useEffect(() => {
     queueMicrotask(load);
   }, [load]);
+
+  async function handleSendEmailNow() {
+    setSendingEmail(true);
+    setEmailMessage(null);
+    try {
+      const position = await getCurrentPosition();
+      const url = position
+        ? `/api/briefing/send-email?lat=${position.coords.latitude}&lng=${position.coords.longitude}`
+        : "/api/briefing/send-email";
+      const res = await fetch(url, { method: "POST" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.error || "메일 발송에 실패했습니다.");
+      }
+      setEmailMessage({ text: "브리핑 메일을 보냈습니다.", error: false });
+    } catch (err) {
+      setEmailMessage({
+        text: err instanceof Error ? err.message : "메일 발송에 실패했습니다.",
+        error: true,
+      });
+    } finally {
+      setSendingEmail(false);
+      setTimeout(() => setEmailMessage(null), 5000);
+    }
+  }
 
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -156,6 +183,13 @@ export default function BriefingPage() {
           >
             새로고침
           </button>
+          <button
+            onClick={handleSendEmailNow}
+            disabled={sendingEmail}
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {sendingEmail ? "보내는 중..." : "메일로 보내기"}
+          </button>
           <Link
             href="/calendar"
             className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
@@ -179,6 +213,16 @@ export default function BriefingPage() {
 
       {error && (
         <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600">{error}</div>
+      )}
+
+      {emailMessage && (
+        <div
+          className={`mb-4 rounded-lg px-4 py-3 text-sm ${
+            emailMessage.error ? "bg-red-50 text-red-600" : "bg-green-50 text-green-700"
+          }`}
+        >
+          {emailMessage.text}
+        </div>
       )}
 
       {data && !data.homeAddressConfigured && (
