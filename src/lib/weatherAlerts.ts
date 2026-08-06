@@ -127,6 +127,19 @@ function findCityCode(region2: string, provinceCode: string | null): string | nu
   return null;
 }
 
+// A handful of guide entries read "OO 동지역 전체, <읍/면 list>" — the city's
+// entire built-up 동 core belongs to that one subregion, only the listed
+// 읍/면 go elsewhere. Rather than enumerate every 법정동 (Sejong's urban
+// core alone has a dozen), KMA_SUBREGION_SPLITS marks that rule with this
+// sentinel; it's safe as a plain string since no real KMA district name
+// starts with "*".
+const DONG_WILDCARD = "*동";
+
+function districtMatchesRule(districts: string[], district: string, region3: string): boolean {
+  if (districts.includes(district) || districts.includes(region3)) return true;
+  return districts.includes(DONG_WILDCARD) && (district.endsWith("동") || region3.endsWith("동"));
+}
+
 // Given the most specific area code already resolved (a city, or a metro
 // resolved at 시/도 level), checks whether that area is one KMA further
 // splits (KMA_SUBREGION_SPLITS, transcribed from KMA's own 세분구역 guide)
@@ -148,7 +161,7 @@ function resolvePreciseSubRegionCode(leafCode: string, region2: string, region3:
 
   const descendants = collectDescendants(leafCode);
   for (const rule of rules) {
-    if (!rule.districts.includes(district) && !rule.districts.includes(region3)) continue;
+    if (!districtMatchesRule(rule.districts, district, region3)) continue;
     const match = descendants.find((code) => REGIONS_BY_CODE.get(code)?.name === rule.sub);
     if (match) return match;
   }

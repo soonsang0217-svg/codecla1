@@ -59,7 +59,7 @@ export const KMA_SUBREGION_SPLITS: SubRegionSplit[] = [
     parent: "여주",
     rules: [
       { sub: "여주서부", districts: ["산북면", "금사면", "흥천면", "대신면", "세종대왕면"] },
-      { sub: "여주동남부", districts: ["가남읍", "점동면", "북내면", "강천면"] },
+      { sub: "여주동남부", districts: ["*동", "가남읍", "점동면", "북내면", "강천면"] },
     ],
   },
   {
@@ -107,7 +107,7 @@ export const KMA_SUBREGION_SPLITS: SubRegionSplit[] = [
   {
     parent: "강릉",
     rules: [
-      { sub: "강릉평지", districts: ["주문진읍", "구정면", "강동면", "옥계면", "사천면"] },
+      { sub: "강릉평지", districts: ["*동", "주문진읍", "구정면", "강동면", "옥계면", "사천면"] },
       { sub: "강릉산지", districts: ["연곡면", "성산면", "왕산면"] },
     ],
   },
@@ -135,7 +135,7 @@ export const KMA_SUBREGION_SPLITS: SubRegionSplit[] = [
   {
     parent: "삼척",
     rules: [
-      { sub: "삼척평지", districts: ["원덕읍", "근덕면"] },
+      { sub: "삼척평지", districts: ["*동", "원덕읍", "근덕면"] },
       { sub: "삼척산지", districts: ["도계읍", "미로면", "하장면", "노곡면", "가곡면", "신기면"] },
     ],
   },
@@ -150,7 +150,7 @@ export const KMA_SUBREGION_SPLITS: SubRegionSplit[] = [
     parent: "세종",
     rules: [
       { sub: "세종북부", districts: ["소정면", "전의면", "전동면", "조치원읍"] },
-      { sub: "세종남부", districts: ["연서면", "연기면", "연동면", "부강면", "금남면", "장군면"] },
+      { sub: "세종남부", districts: ["*동", "연서면", "연기면", "연동면", "부강면", "금남면", "장군면"] },
     ],
   },
   {
@@ -200,7 +200,7 @@ export const KMA_SUBREGION_SPLITS: SubRegionSplit[] = [
     parent: "나주",
     rules: [
       { sub: "나주동남부", districts: ["세지면", "봉황면", "다도면"] },
-      { sub: "나주서북부", districts: ["남평읍", "왕곡면", "반남면", "공산면", "동강면", "다시면", "문평면", "노안면", "금천면", "산포면"] },
+      { sub: "나주서북부", districts: ["*동", "남평읍", "왕곡면", "반남면", "공산면", "동강면", "다시면", "문평면", "노안면", "금천면", "산포면"] },
     ],
   },
   {
@@ -298,7 +298,7 @@ export const KMA_SUBREGION_SPLITS: SubRegionSplit[] = [
       { sub: "경주남부", districts: ["외동읍", "내남면"] },
       { sub: "경주서부", districts: ["건천읍", "산내면", "서면"] },
       { sub: "경주동부", districts: ["감포읍", "문무대왕면", "양남면"] },
-      { sub: "경주중북부", districts: ["안강읍", "강동면", "천북면", "현곡면"] },
+      { sub: "경주중북부", districts: ["*동", "안강읍", "강동면", "천북면", "현곡면"] },
     ],
   },
   {
@@ -306,14 +306,14 @@ export const KMA_SUBREGION_SPLITS: SubRegionSplit[] = [
     rules: [
       { sub: "안동동남부", districts: ["임동면", "길안면", "임하면", "남선면"] },
       { sub: "안동북부", districts: ["도산면", "예안면", "녹전면", "와룡면", "북후면"] },
-      { sub: "안동서부", districts: ["풍산읍", "서후면", "풍천면", "남후면", "일직면"] },
+      { sub: "안동서부", districts: ["*동", "풍산읍", "서후면", "풍천면", "남후면", "일직면"] },
     ],
   },
   {
     parent: "김천",
     rules: [
       { sub: "김천남부", districts: ["조마면", "구성면", "지례면", "부항면", "대덕면", "증산면"] },
-      { sub: "김천북부", districts: ["대항면", "봉산면", "어모면", "감문면", "개령면", "아포읍", "남면", "농소면", "감천면"] },
+      { sub: "김천북부", districts: ["*동", "대항면", "봉산면", "어모면", "감문면", "개령면", "아포읍", "남면", "농소면", "감천면"] },
     ],
   },
   {
@@ -373,7 +373,7 @@ export const KMA_SUBREGION_SPLITS: SubRegionSplit[] = [
     rules: [
       { sub: "제주시동부", districts: ["구좌읍", "우도면"] },
       { sub: "제주시서부", districts: ["한림읍", "한경면"] },
-      { sub: "제주시북부", districts: ["애월읍", "조천읍"] },
+      { sub: "제주시북부", districts: ["*동", "애월읍", "조천읍"] },
     ],
   },
   {
@@ -381,7 +381,7 @@ export const KMA_SUBREGION_SPLITS: SubRegionSplit[] = [
     rules: [
       { sub: "서귀포시동부", districts: ["성산읍", "표선면"] },
       { sub: "서귀포시서부", districts: ["대정읍"] },
-      { sub: "서귀포시남부", districts: ["안덕면", "남원읍"] },
+      { sub: "서귀포시남부", districts: ["*동", "안덕면", "남원읍"] },
     ],
   },
 ];
