@@ -201,6 +201,48 @@ function kakaoMapLink(destination: GeoPoint): string {
   return `https://map.kakao.com/link/to/${encodeURIComponent(destination.name)},${destination.lat},${destination.lng}`;
 }
 
+function notFoundCommuteResult(destinationText: string): CommuteInfo {
+  return {
+    destination: destinationText,
+    durationMinutes: null,
+    distanceKm: null,
+    mapLink: `https://map.kakao.com/?q=${encodeURIComponent(destinationText)}`,
+    note: "위치를 찾을 수 없어 경로를 계산하지 못했습니다.",
+    departureBy: null,
+  };
+}
+
+function errorCommuteResult(destinationText: string): CommuteInfo {
+  return {
+    destination: destinationText,
+    durationMinutes: null,
+    distanceKm: null,
+    mapLink: `https://map.kakao.com/?q=${encodeURIComponent(destinationText)}`,
+    note: "경로 계산 중 오류가 발생했습니다.",
+    departureBy: null,
+  };
+}
+
+async function buildCommuteResult(
+  origin: GeoPoint | null,
+  destination: GeoPoint | null,
+  destinationText: string,
+  eventStartIso: string | null | undefined,
+  apiKey: string
+): Promise<CommuteInfo> {
+  if (!origin || !destination) return notFoundCommuteResult(destinationText);
+
+  const route = await drivingRoute(origin, destination, apiKey);
+  return {
+    destination: destination.name,
+    durationMinutes: route?.durationMinutes ?? null,
+    distanceKm: route?.distanceKm ?? null,
+    mapLink: kakaoMapLink(destination),
+    note: route ? undefined : "자동차 경로를 계산하지 못했습니다. 지도에서 대중교통 경로를 확인하세요.",
+    departureBy: computeDepartureBy(eventStartIso, route?.durationMinutes ?? null),
+  };
+}
+
 /**
  * Resolves commute time/distance from homeAddress to the event's location text.
  * Only driving directions are available via Kakao's public REST API; a Kakao
@@ -219,36 +261,30 @@ export async function getCommuteInfo(
       geocode(homeAddress, apiKey),
       geocode(destinationText, apiKey),
     ]);
-
-    if (!origin || !destination) {
-      return {
-        destination: destinationText,
-        durationMinutes: null,
-        distanceKm: null,
-        mapLink: `https://map.kakao.com/?q=${encodeURIComponent(destinationText)}`,
-        note: "위치를 찾을 수 없어 경로를 계산하지 못했습니다.",
-        departureBy: null,
-      };
-    }
-
-    const route = await drivingRoute(origin, destination, apiKey);
-    return {
-      destination: destination.name,
-      durationMinutes: route?.durationMinutes ?? null,
-      distanceKm: route?.distanceKm ?? null,
-      mapLink: kakaoMapLink(destination),
-      note: route ? undefined : "자동차 경로를 계산하지 못했습니다. 지도에서 대중교통 경로를 확인하세요.",
-      departureBy: computeDepartureBy(eventStartIso, route?.durationMinutes ?? null),
-    };
+    return await buildCommuteResult(origin, destination, destinationText, eventStartIso, apiKey);
   } catch (err) {
     console.error("Failed to compute commute info", err);
-    return {
-      destination: destinationText,
-      durationMinutes: null,
-      distanceKm: null,
-      mapLink: `https://map.kakao.com/?q=${encodeURIComponent(destinationText)}`,
-      note: "경로 계산 중 오류가 발생했습니다.",
-      departureBy: null,
-    };
+    return errorCommuteResult(destinationText);
+  }
+}
+
+/**
+ * Same as getCommuteInfo, but the origin is an already-known point (e.g. the
+ * user's live browser geolocation) instead of a home address to geocode.
+ */
+export async function getCommuteInfoFromPoint(
+  origin: GeoPoint,
+  destinationText: string,
+  eventStartIso?: string | null
+): Promise<CommuteInfo | null> {
+  const apiKey = process.env.KAKAO_REST_API_KEY;
+  if (!apiKey || !destinationText) return null;
+
+  try {
+    const destination = await geocode(destinationText, apiKey);
+    return await buildCommuteResult(origin, destination, destinationText, eventStartIso, apiKey);
+  } catch (err) {
+    console.error("Failed to compute commute info", err);
+    return errorCommuteResult(destinationText);
   }
 }

@@ -33,6 +33,7 @@ export interface BriefingResponse {
   stocks: StockQuote[];
   weather: WeatherInfo | null;
   homeAddressConfigured: boolean;
+  locationSource: "current" | "home";
 }
 
 export type { CommuteInfo, StockQuote, NewsItem, WeatherInfo };

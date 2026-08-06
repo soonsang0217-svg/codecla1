@@ -16,6 +16,23 @@ import TaskFormModal, { type TaskFormValues } from "@/components/TaskFormModal";
 type EventModalState = "closed" | "new" | { event: BriefingEvent };
 type TaskModalState = "closed" | "new" | { task: BriefingTask };
 
+// Best-effort: resolves to the browser's current coordinates, or null if the
+// user denies/ignores the permission prompt or the browser doesn't support
+// it. Never rejects, and never blocks the briefing load for long.
+function getCurrentPosition(timeoutMs = 5000): Promise<GeolocationPosition | null> {
+  return new Promise((resolve) => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      resolve(null);
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (position) => resolve(position),
+      () => resolve(null),
+      { timeout: timeoutMs, maximumAge: 5 * 60 * 1000 }
+    );
+  });
+}
+
 export default function BriefingPage() {
   const router = useRouter();
   const [data, setData] = useState<BriefingResponse | null>(null);
@@ -27,7 +44,11 @@ export default function BriefingPage() {
   const load = useCallback(async () => {
     setError(null);
     try {
-      const res = await fetch("/api/briefing", { cache: "no-store" });
+      const position = await getCurrentPosition();
+      const url = position
+        ? `/api/briefing?lat=${position.coords.latitude}&lng=${position.coords.longitude}`
+        : "/api/briefing";
+      const res = await fetch(url, { cache: "no-store" });
       if (res.status === 401) {
         const body = await res.json().catch(() => null);
         if (body?.error === "google_not_connected") {
@@ -170,7 +191,14 @@ export default function BriefingPage() {
       )}
 
       <section className="mb-6">
-        <h2 className="mb-3 text-lg font-bold text-slate-900">오늘 날씨</h2>
+        <div className="mb-3 flex items-center gap-2">
+          <h2 className="text-lg font-bold text-slate-900">오늘 날씨</h2>
+          {data && (
+            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">
+              {data.locationSource === "current" ? "현재 위치 기준" : "집 주소 기준"}
+            </span>
+          )}
+        </div>
         <WeatherCard weather={data?.weather ?? null} />
       </section>
 
