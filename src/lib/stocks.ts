@@ -54,6 +54,7 @@ async function fetchFinnhubQuote(symbol: string, apiKey: string): Promise<StockQ
     await setKV(cacheKey, quote, CACHE_TTL_SECONDS);
     return quote;
   } catch (err) {
+    console.error(`Failed to fetch Finnhub quote for ${symbol}`, err);
     return {
       symbol,
       price: null,
@@ -103,6 +104,10 @@ async function fetchNaverQuote(code: string): Promise<StockQuote> {
     if (!res.ok) throw new Error(`Naver Finance returned ${res.status}`);
     const data = (await res.json()) as NaverBasicResponse;
 
+    // Confirms whether highPrice/lowPrice actually exist on this endpoint —
+    // check Vercel's Runtime Logs if the day-range bar isn't showing for KR stocks.
+    console.log(`Naver quote for ${code}: highPrice=${data.highPrice} lowPrice=${data.lowPrice}`);
+
     const sign = naverSign(data.compareToPreviousPrice?.code ?? "3");
     const price = parseNaverNumber(data.closePrice);
     const change = sign * Math.abs(parseNaverNumber(data.compareToPreviousClosePrice));
@@ -121,6 +126,7 @@ async function fetchNaverQuote(code: string): Promise<StockQuote> {
     await setKV(cacheKey, quote, CACHE_TTL_SECONDS);
     return quote;
   } catch (err) {
+    console.error(`Failed to fetch Naver quote for ${code}`, err);
     return {
       symbol: code,
       price: null,
