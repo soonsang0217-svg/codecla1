@@ -11,41 +11,20 @@ export interface WeatherAlert {
   regions: string;
 }
 
-// KMA's public "특보코드조회" endpoint (기상청_기상특보 조회서비스, data.go.kr).
-// Unlike the free-text nationwide bulletin (getPwnStatus), this returns
-// structured per-area warning *events* (issued/extended/corrected/cancelled)
-// filtered by an official 특보구역코드 (area code) — the area code table
-// (KMA_REGIONS) is the same reference spreadsheet KMA ships with the API
-// docs. "Currently active" isn't a field on its own; it's derived below by
-// taking, per (area, warning type), the most recent event and checking
-// whether it's still in an issued state.
-const KMA_ENDPOINT = "https://apis.data.go.kr/1360000/WthrWrnInfoService/getPwnCd";
+// KMA's public "특보 발효 현황" endpoint (기상청_기상특보 조회서비스,
+// data.go.kr). getPwnCd (structured per-area-code query) was tried first but
+// proved unreliable in production — it returned items=0 for every queried
+// area code (nationwide down to the precise sub-region) for a confirmed,
+// currently-active advisory. getPwnStatus instead returns one free-text
+// nationwide snapshot (`t6`, a list of "o 제목 : 지역목록" bullets) that a
+// real pasted response proved does contain live, matchable text (e.g.
+// "세종(세종남부)" for a 열대야주의보). The area-code table (KMA_REGIONS) and
+// the sub-region split rules (KMA_SUBREGION_SPLITS) below are still used —
+// not to query by code, but to resolve the precise Korean names to match
+// against that free text.
+const KMA_ENDPOINT = "https://apis.data.go.kr/1360000/WthrWrnInfoService/getPwnStatus";
 const CACHE_TTL_SECONDS = 600; // 10 minutes
-const LOOKBACK_DAYS = 14; // long enough to catch a still-active, multi-day advisory
 const parser = new XMLParser({ ignoreAttributes: true });
-
-const WARN_TYPE_LABELS: Record<string, string> = {
-  "1": "강풍",
-  "2": "호우",
-  "3": "한파",
-  "4": "건조",
-  "5": "폭풍해일",
-  "6": "풍랑",
-  "7": "태풍",
-  "8": "대설",
-  "9": "황사",
-  "12": "폭염",
-  "13": "열대야",
-};
-const WARN_STRESS_LABELS: Record<string, string> = {
-  "0": "주의보",
-  "1": "경보",
-  "2": "중대경보",
-};
-// 특보발표코드: 1-발표, 2-해제, 3-연장, 6-정정, 7-변경발표, 8-변경해제.
-// A correction (6) is treated as still-active since it corrects an existing
-// active warning rather than changing its issued/cleared state.
-const ACTIVE_COMMANDS = new Set(["1", "3", "6", "7"]);
 
 const REGIONS_BY_CODE = new Map(KMA_REGIONS.map((r) => [r.code, r]));
 const NATIONWIDE_CODE = "L1000000";
@@ -269,38 +248,31 @@ function resolveQueryAreaCodes(region: RegionInfo): string[] {
   return [...codes];
 }
 
-function formatYmdKst(date: Date): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Seoul",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  })
-    .format(date)
-    .replace(/-/g, "");
+// Converts the resolved area codes (ancestors + precise/broad leaf) into the
+// Korean names getPwnStatus's free text actually uses to refer to them,
+// e.g. L1170120 -> "세종남부". 전국 is dropped since the bulletin never
+// prefixes a nationwide entry with a literal "전국" segment to match against.
+function resolveMatchKeywords(region: RegionInfo): string[] {
+  const codes = resolveQueryAreaCodes(region).filter((code) => code !== NATIONWIDE_CODE);
+  const names = codes.map((code) => REGIONS_BY_CODE.get(code)?.name).filter((name): name is string => !!name);
+  return [...new Set(names)];
 }
 
-interface KmaPwnCdItem {
-  areaCode?: string;
-  areaName?: string;
-  warnVar?: string | number;
-  warnStress?: string | number;
-  command?: string | number;
-  cancel?: string | number;
-  tmFc?: string;
+interface KmaPwnStatusItem {
+  t6?: string;
 }
 
-interface KmaPwnCdResponse {
+interface KmaPwnStatusResponse {
   response?: {
     header?: { resultCode?: string; resultMsg?: string };
     body?: {
-      items?: { item?: KmaPwnCdItem | KmaPwnCdItem[] };
+      items?: { item?: KmaPwnStatusItem | KmaPwnStatusItem[] };
     };
   };
   // data.go.kr's *other* error shape: auth/param failures often return
   // HTTP 200 with this envelope instead of the normal <response> one — no
-  // `body`, so the old code silently read it as "zero items" with nothing
-  // in the logs to show the request had actually failed.
+  // `body`, so treating that as "zero items" would leave nothing in the
+  // logs to show the request had actually failed.
   OpenAPI_ServiceResponse?: {
     cmmMsgHeader?: {
       errMsg?: string;
@@ -310,25 +282,77 @@ interface KmaPwnCdResponse {
   };
 }
 
-async function fetchAreaEvents(
-  apiKey: string,
-  areaCode: string,
-  fromTmFc: string,
-  toTmFc: string
-): Promise<KmaPwnCdItem[]> {
-  const cacheKey = `weather-alerts:${areaCode}:${fromTmFc}:${toTmFc}`;
-  const cached = await getKV<KmaPwnCdItem[]>(cacheKey);
+// The bulletin packs every "o 제목 : 지역목록" entry onto one line (no
+// newlines between them in practice), so split on the "o" bullet marker
+// itself rather than on line breaks.
+function parseAlertLines(t6: string): WeatherAlert[] {
+  const alerts: WeatherAlert[] = [];
+  const chunks = t6.split(/\s*\bo\b\s+/).map((c) => c.trim()).filter(Boolean);
+  for (const chunk of chunks) {
+    const sepIndex = chunk.indexOf(":");
+    if (sepIndex === -1) continue;
+    const title = chunk.slice(0, sepIndex).trim();
+    const regions = chunk.slice(sepIndex + 1).trim();
+    if (!title || !regions) continue;
+    alerts.push({ title, regions });
+  }
+  return alerts;
+}
+
+// Comma-split a region list without breaking apart a "(...)" sub-list, e.g.
+// "충청남도(보령도서 제외), 세종(세종남부)" -> ["충청남도(보령도서 제외)", "세종(세종남부)"].
+function splitTopLevelRegions(regions: string): string[] {
+  const segments: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (let i = 0; i < regions.length; i++) {
+    const ch = regions[i];
+    if (ch === "(") depth++;
+    else if (ch === ")") depth--;
+    else if (ch === "," && depth === 0) {
+      segments.push(regions.slice(start, i).trim());
+      start = i + 1;
+    }
+  }
+  segments.push(regions.slice(start).trim());
+  return segments.filter(Boolean);
+}
+
+// A segment like "충청남도(보령도서 제외)" means "충청남도 minus 보령도서" —
+// relevant unless one of our keywords is the excluded area. A segment like
+// "세종(세종남부)" (no "제외") means "only 세종남부" — relevant only if a
+// keyword matches what's inside the parens, not just the outer name.
+function isSegmentRelevant(segment: string, keywords: string[]): boolean {
+  const parenIndex = segment.indexOf("(");
+  const outer = (parenIndex === -1 ? segment : segment.slice(0, parenIndex)).trim();
+  const matchesOuter = keywords.some((kw) => outer.startsWith(kw) || kw.startsWith(outer));
+  if (parenIndex === -1) return matchesOuter;
+
+  const inner = segment.slice(parenIndex + 1, segment.lastIndexOf(")"));
+  if (!matchesOuter) return false;
+
+  if (inner.includes("제외")) {
+    return !keywords.some((kw) => inner.includes(kw));
+  }
+  return keywords.some((kw) => inner.includes(kw));
+}
+
+function isAlertRelevant(alert: WeatherAlert, keywords: string[]): boolean {
+  return splitTopLevelRegions(alert.regions).some((segment) => isSegmentRelevant(segment, keywords));
+}
+
+async function fetchNationwideAlerts(apiKey: string): Promise<WeatherAlert[]> {
+  const cacheKey = "weather-alerts:pwn-status";
+  const cached = await getKV<WeatherAlert[]>(cacheKey);
   if (cached) return cached;
 
   try {
-    const url =
-      `${KMA_ENDPOINT}?serviceKey=${encodeURIComponent(apiKey)}` +
-      `&numOfRows=50&pageNo=1&areaCode=${areaCode}&fromTmFc=${fromTmFc}&toTmFc=${toTmFc}`;
+    const url = `${KMA_ENDPOINT}?serviceKey=${encodeURIComponent(apiKey)}&numOfRows=10&pageNo=1&dataType=XML`;
     const res = await fetch(url, { cache: "no-store" });
-    if (!res.ok) throw new Error(`KMA getPwnCd returned ${res.status}`);
+    if (!res.ok) throw new Error(`KMA getPwnStatus returned ${res.status}`);
 
     const xml = await res.text();
-    const data = parser.parse(xml) as KmaPwnCdResponse;
+    const data = parser.parse(xml) as KmaPwnStatusResponse;
 
     const commonError = data.OpenAPI_ServiceResponse?.cmmMsgHeader;
     if (commonError) {
@@ -340,57 +364,31 @@ async function fetchAreaEvents(
 
     const resultCode = data.response?.header?.resultCode;
     if (resultCode && resultCode !== "00" && resultCode !== "0") {
-      throw new Error(`KMA getPwnCd resultCode=${resultCode} resultMsg=${data.response?.header?.resultMsg}`);
+      throw new Error(`KMA getPwnStatus resultCode=${resultCode} resultMsg=${data.response?.header?.resultMsg}`);
     }
 
     const rawItem = data.response?.body?.items?.item;
     const items = rawItem ? (Array.isArray(rawItem) ? rawItem : [rawItem]) : [];
-    console.log(`KMA getPwnCd area=${areaCode} range=${fromTmFc}-${toTmFc} items=${items.length}`);
+    const t6 = items[0]?.t6 ?? "";
+    const alerts = parseAlertLines(t6);
+    console.log(`KMA getPwnStatus parsed ${alerts.length} bulletin entries`);
 
-    await setKV(cacheKey, items, CACHE_TTL_SECONDS);
-    return items;
+    await setKV(cacheKey, alerts, CACHE_TTL_SECONDS);
+    return alerts;
   } catch (err) {
-    console.error(`Failed to fetch KMA warnings for area ${areaCode}`, err);
+    console.error("Failed to fetch KMA weather alert bulletin", err);
     return [];
   }
 }
 
-// Reduces a stream of issue/extend/correct/cancel events down to whatever is
-// currently in effect: group by (area, warning type), keep only the most
-// recent event per group, then keep the group if that event is still an
-// active state (not cancelled/cleared).
-function determineActiveAlerts(items: KmaPwnCdItem[]): WeatherAlert[] {
-  const latestByKey = new Map<string, KmaPwnCdItem>();
-  for (const item of items) {
-    const key = `${item.areaCode}:${item.warnVar}`;
-    const existing = latestByKey.get(key);
-    if (!existing || String(item.tmFc ?? "") > String(existing.tmFc ?? "")) {
-      latestByKey.set(key, item);
-    }
-  }
-
-  const alerts: WeatherAlert[] = [];
-  for (const item of latestByKey.values()) {
-    const cancelled = String(item.cancel ?? "0") === "1";
-    if (cancelled || !ACTIVE_COMMANDS.has(String(item.command ?? ""))) continue;
-
-    const typeLabel = WARN_TYPE_LABELS[String(item.warnVar ?? "")];
-    const stressLabel = WARN_STRESS_LABELS[String(item.warnStress ?? "")];
-    if (!typeLabel || !stressLabel) continue;
-
-    alerts.push({ title: `${typeLabel}${stressLabel}`, regions: item.areaName ?? "" });
-  }
-  return alerts;
-}
-
 /**
  * Currently active KMA (기상청) advisories/warnings for the given
- * coordinates, resolved via the official 특보구역코드 table rather than
- * text-matching the nationwide bulletin. Queries every area code on this
- * location's path through the region hierarchy — ancestors (시/도, 전국)
- * plus the precisely (or, failing that, broadly) resolved city/metro area —
- * over the last two weeks to reliably catch a still-active multi-day
- * advisory.
+ * coordinates. Fetches the single nationwide free-text bulletin
+ * (getPwnStatus) and filters it down to entries whose region list matches
+ * this location, using the official 특보구역코드 hierarchy (KMA_REGIONS,
+ * KMA_SUBREGION_SPLITS) to resolve the precise Korean names to match
+ * against — not to query by area code, since getPwnCd proved to return no
+ * data at all for a confirmed-active advisory in production.
  */
 export async function getActiveWeatherAlerts(lat: number, lng: number): Promise<WeatherAlert[]> {
   const apiKey = process.env.KMA_WARNING_API_KEY;
@@ -410,20 +408,10 @@ export async function getActiveWeatherAlerts(lat: number, lng: number): Promise<
       `region2="${region.region2}" region3="${region.region3}"`
   );
 
-  const areaCodes = resolveQueryAreaCodes(region);
-  console.log(
-    `Weather alerts for ${region.address}:`,
-    areaCodes.map((code) => `${code}(${REGIONS_BY_CODE.get(code)?.name})`).join(", ")
-  );
-  if (areaCodes.length === 0) return [];
+  const keywords = resolveMatchKeywords(region);
+  console.log(`Weather alert match keywords for ${region.address}:`, keywords.join(", "));
+  if (keywords.length === 0) return [];
 
-  const now = new Date();
-  const toTmFc = formatYmdKst(now);
-  const fromTmFc = formatYmdKst(new Date(now.getTime() - LOOKBACK_DAYS * 24 * 60 * 60 * 1000));
-
-  const results = await Promise.all(
-    areaCodes.map((code) => fetchAreaEvents(apiKey, code, fromTmFc, toTmFc))
-  );
-
-  return determineActiveAlerts(results.flat());
+  const alerts = await fetchNationwideAlerts(apiKey);
+  return alerts.filter((alert) => isAlertRelevant(alert, keywords));
 }
