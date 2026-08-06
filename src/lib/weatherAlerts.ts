@@ -405,6 +405,11 @@ export async function getActiveWeatherAlerts(lat: number, lng: number): Promise<
     return [];
   }
 
+  console.log(
+    `Reverse geocoded ${lat},${lng} -> address="${region.address}" region1="${region.region1}" ` +
+      `region2="${region.region2}" region3="${region.region3}"`
+  );
+
   const areaCodes = resolveQueryAreaCodes(region);
   console.log(
     `Weather alerts for ${region.address}:`,
