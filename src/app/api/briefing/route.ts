@@ -3,9 +3,17 @@ import { requireGoogleClient, handleApiError } from "@/lib/apiAuth";
 import { listEvents } from "@/lib/googleCalendar";
 import { listTasks } from "@/lib/googleTasks";
 import { getStockQuotes } from "@/lib/stocks";
-import { getCommuteInfo } from "@/lib/directions";
+import { getCommuteInfo, geocodeAddress } from "@/lib/directions";
+import { getWeather, type WeatherInfo } from "@/lib/weather";
 import { getSettings } from "@/lib/config";
 import { getTodayRangeInKst } from "@/lib/timezone";
+
+async function getHomeWeather(homeAddress: string): Promise<WeatherInfo | null> {
+  if (!homeAddress) return null;
+  const home = await geocodeAddress(homeAddress);
+  if (!home) return null;
+  return getWeather(home.lat, home.lng);
+}
 
 export async function GET() {
   try {
@@ -14,10 +22,11 @@ export async function GET() {
 
     const { startOfDay, endOfDay } = getTodayRangeInKst();
 
-    const [events, tasks, stocks] = await Promise.all([
+    const [events, tasks, stocks, weather] = await Promise.all([
       listEvents(auth, startOfDay.toISOString(), endOfDay.toISOString()),
       listTasks(auth, false),
       getStockQuotes(settings.stockSymbols),
+      getHomeWeather(settings.homeAddress),
     ]);
 
     const eventsWithCommute = await Promise.all(
@@ -39,6 +48,7 @@ export async function GET() {
       events: eventsWithCommute,
       tasks,
       stocks,
+      weather,
       homeAddressConfigured: !!settings.homeAddress,
     });
   } catch (err) {

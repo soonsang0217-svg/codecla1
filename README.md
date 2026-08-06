@@ -11,6 +11,9 @@
 - **월별 캘린더** (`/calendar`) — 달력에서 날짜 클릭해 그날 일정 확인·추가·수정
 - **할 일** — Google Tasks 조회, 체크, 생성, 수정, 삭제
 - **주식 현황** — 설정에서 등록한 관심 종목의 실시간에 가까운 시세 (해외: Finnhub, 국내: Naver 금융)
+- **오늘 날씨** — 날씨 아이콘, 최고/최저기온, 강수확률, 미세먼지(PM2.5), 비/눈이 예상되면 시작
+  시각까지 표시 (Open-Meteo, 키 불필요). 설정에 등록한 집 주소를 Kakao로 좌표 변환해 해당
+  위치 기준으로 조회
 - **주요 뉴스** — 국가/키워드 기준 헤드라인 (Google 뉴스 RSS, 키 불필요)
 - **이동 경로/시간** — 일정에 장소가 있으면 집 주소 기준 예상 자동차 이동 시간·거리·출발 시각 (Kakao)
   와 지도 링크를 함께 표시. 일정 등록 시 장소는 Kakao 검색 자동완성으로 입력해 오탈자로 인한
@@ -25,7 +28,7 @@
 - **Upstash Redis** (REST 기반, 서버리스 친화적) — Google 토큰, 사용자 설정, 외부 API 응답
   캐시를 저장. 로컬 파일에 의존하지 않으므로 Vercel 같은 서버리스 플랫폼에서도 재배포/재시작과
   무관하게 데이터가 유지됩니다.
-- **Finnhub / Naver 금융 / Google 뉴스 RSS / Kakao Local·Mobility API** — 외부 데이터 소스
+- **Finnhub / Naver 금융 / Google 뉴스 RSS / Kakao Local·Mobility API / Open-Meteo** — 외부 데이터 소스
 - 서명된 쿠키 기반 세션(자체 구현) — 별도 인증 서버 없이 허용된 Google 계정 1명(또는 소수)만
   접근하도록 게이팅
 
@@ -48,6 +51,7 @@
 | 주식 시세 | [finnhub.io](https://finnhub.io) 무료 가입 | API 키 |
 | 뉴스 | 없음 (Google 뉴스 RSS, 키/가입 불필요) | - |
 | 이동 경로 | [Kakao Developers](https://developers.kakao.com) | 앱 생성 → Local + 길찾기(Directions) 제품 활성화 → REST API 키 |
+| 날씨 | 없음 (Open-Meteo, 키/가입 불필요) | 집 주소(`HOME_ADDRESS`)와 `KAKAO_REST_API_KEY`가 있어야 좌표 변환 후 조회됩니다 |
 
 Google OAuth 클라이언트의 **승인된 리디렉션 URI**는 3단계에서 Vercel이 발급해주는 주소를
 알아야 정확히 채울 수 있으므로, Google 클라이언트 생성은 4단계 이후에 마무리해도 됩니다

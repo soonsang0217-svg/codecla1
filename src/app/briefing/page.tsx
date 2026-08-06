@@ -7,6 +7,7 @@ import type { BriefingEvent, BriefingResponse, BriefingTask } from "@/lib/types"
 import { formatDueDate, formatTodayKorean } from "@/lib/format";
 import EventCard from "@/components/EventCard";
 import StockCard from "@/components/StockCard";
+import WeatherCard from "@/components/WeatherCard";
 import NewsPanel from "@/components/NewsPanel";
 import Clock from "@/components/Clock";
 import EventFormModal, { type EventFormValues } from "@/components/EventFormModal";
@@ -167,6 +168,11 @@ export default function BriefingPage() {
           </Link>
         </div>
       )}
+
+      <section className="mb-6">
+        <h2 className="mb-3 text-lg font-bold text-slate-900">오늘 날씨</h2>
+        <WeatherCard weather={data?.weather ?? null} />
+      </section>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <section>

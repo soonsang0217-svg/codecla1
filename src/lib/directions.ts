@@ -142,6 +142,13 @@ function buildGeocodeCandidates(raw: string): string[] {
   return Array.from(candidates).filter(Boolean);
 }
 
+/** Geocodes an arbitrary address/place text using the same cache as commute lookups. */
+export async function geocodeAddress(query: string): Promise<GeoPoint | null> {
+  const apiKey = process.env.KAKAO_REST_API_KEY;
+  if (!apiKey || !query.trim()) return null;
+  return geocode(query, apiKey);
+}
+
 async function geocode(query: string, apiKey: string): Promise<GeoPoint | null> {
   const cacheKey = `geocode:${query}`;
   const cached = await getKV<GeoPoint>(cacheKey);
