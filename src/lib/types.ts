@@ -2,6 +2,7 @@ import type { CommuteInfo } from "./directions";
 import type { StockQuote } from "./stocks";
 import type { NewsItem } from "./news";
 import type { WeatherInfo } from "./weather";
+import type { WeatherAlert } from "./weatherAlerts";
 
 export interface BriefingEventTime {
   dateTime?: string | null;
@@ -41,4 +42,4 @@ export interface BriefingResponse {
   locationLabel: string | null;
 }
 
-export type { CommuteInfo, StockQuote, NewsItem, WeatherInfo };
+export type { CommuteInfo, StockQuote, NewsItem, WeatherInfo, WeatherAlert };

@@ -9,16 +9,23 @@ import {
   reverseGeocode,
   type GeoPoint,
 } from "./directions";
-import { getWeather, type WeatherInfo } from "./weather";
+import { getWeather } from "./weather";
+import { getActiveWeatherAlerts } from "./weatherAlerts";
 import { getSettings } from "./config";
 import { getTodayRangeInKst } from "./timezone";
 import type { BriefingResponse } from "./types";
 
-async function getHomeWeather(homeAddress: string): Promise<WeatherInfo | null> {
+// The point weather/alerts/commute are all computed from: live browser
+// geolocation when available, otherwise the configured home address
+// geocoded once and reused for everything below (rather than each concern
+// re-geocoding the same address separately).
+async function resolveEffectiveLocation(
+  currentLocation: GeoPoint | null,
+  homeAddress: string
+): Promise<GeoPoint | null> {
+  if (currentLocation) return currentLocation;
   if (!homeAddress) return null;
-  const home = await geocodeAddress(homeAddress);
-  if (!home) return null;
-  return getWeather(home.lat, home.lng);
+  return geocodeAddress(homeAddress);
 }
 
 /**
@@ -30,10 +37,11 @@ async function getHomeWeather(homeAddress: string): Promise<WeatherInfo | null> 
 export async function getBriefingData(currentLocation: GeoPoint | null): Promise<BriefingResponse> {
   const auth = await requireGoogleClient();
   const settings = await getSettings();
+  const effectiveLocation = await resolveEffectiveLocation(currentLocation, settings.homeAddress);
 
   const { startOfDay, endOfDay } = getTodayRangeInKst();
 
-  const [events, tasks, allTasks, stocks, weather, locationLabel] = await Promise.all([
+  const [events, tasks, allTasks, stocks, weatherData, alerts, locationLabel] = await Promise.all([
     listEvents(auth, startOfDay.toISOString(), endOfDay.toISOString()),
     // Kept as its own call (rather than filtering the showCompleted:true
     // list below) so a long completed-tasks history can never crowd an
@@ -41,13 +49,16 @@ export async function getBriefingData(currentLocation: GeoPoint | null): Promise
     listTasks(auth, false),
     listTasks(auth, true),
     getStockQuotes(settings.stockSymbols),
-    currentLocation
-      ? getWeather(currentLocation.lat, currentLocation.lng)
-      : getHomeWeather(settings.homeAddress),
+    effectiveLocation ? getWeather(effectiveLocation.lat, effectiveLocation.lng) : Promise.resolve(null),
+    effectiveLocation
+      ? getActiveWeatherAlerts(effectiveLocation.lat, effectiveLocation.lng)
+      : Promise.resolve([]),
     currentLocation
       ? reverseGeocode(currentLocation.lat, currentLocation.lng)
       : Promise.resolve(settings.homeAddress || null),
   ]);
+
+  const weather = weatherData ? { ...weatherData, alerts } : null;
 
   const completedTasks = allTasks
     .filter((task) => task.status === "completed")

@@ -159,21 +159,28 @@ export async function geocodeAddress(query: string): Promise<GeoPoint | null> {
 }
 
 interface KakaoCoord2AddressDoc {
-  address?: { address_name: string };
-  road_address?: { address_name: string };
+  address?: { address_name: string; region_1depth_name?: string; region_2depth_name?: string };
+  road_address?: { address_name: string; region_1depth_name?: string; region_2depth_name?: string };
 }
 
 interface KakaoCoord2AddressResponse {
   documents: KakaoCoord2AddressDoc[];
 }
 
-/** Reverse-geocodes coordinates (e.g. live browser geolocation) to a display address. */
-export async function reverseGeocode(lat: number, lng: number): Promise<string | null> {
+export interface RegionInfo {
+  address: string;
+  /** 시/도, e.g. "경기도" — Kakao's full form, not KMA's 2-syllable abbreviation. */
+  region1: string;
+  /** 시/군/구, e.g. "안산시" or "천안시 서북구". */
+  region2: string;
+}
+
+async function fetchRegionInfo(lat: number, lng: number): Promise<RegionInfo | null> {
   const apiKey = process.env.KAKAO_REST_API_KEY;
   if (!apiKey) return null;
 
-  const cacheKey = `reverse-geocode:${lat.toFixed(3)}:${lng.toFixed(3)}`;
-  const cached = await getKV<string>(cacheKey);
+  const cacheKey = `coord2address:${lat.toFixed(3)}:${lng.toFixed(3)}`;
+  const cached = await getKV<RegionInfo>(cacheKey);
   if (cached) return cached;
 
   try {
@@ -186,14 +193,28 @@ export async function reverseGeocode(lat: number, lng: number): Promise<string |
     const data = (await res.json()) as KakaoCoord2AddressResponse;
     const doc = data.documents?.[0];
     const address = doc?.road_address?.address_name || doc?.address?.address_name;
-    if (!address) return null;
+    const region1 = doc?.address?.region_1depth_name || doc?.road_address?.region_1depth_name;
+    const region2 = doc?.address?.region_2depth_name || doc?.road_address?.region_2depth_name;
+    if (!address || !region1) return null;
 
-    await setKV(cacheKey, address, GEOCODE_CACHE_TTL_SECONDS);
-    return address;
+    const info: RegionInfo = { address, region1, region2: region2 ?? "" };
+    await setKV(cacheKey, info, GEOCODE_CACHE_TTL_SECONDS);
+    return info;
   } catch (err) {
     console.error("Failed to reverse geocode", err);
     return null;
   }
+}
+
+/** Reverse-geocodes coordinates (e.g. live browser geolocation) to a display address. */
+export async function reverseGeocode(lat: number, lng: number): Promise<string | null> {
+  const info = await fetchRegionInfo(lat, lng);
+  return info?.address ?? null;
+}
+
+/** Reverse-geocodes coordinates to structured 시/도 + 시/군/구 names (for KMA region matching). */
+export async function reverseGeocodeRegions(lat: number, lng: number): Promise<RegionInfo | null> {
+  return fetchRegionInfo(lat, lng);
 }
 
 async function geocode(query: string, apiKey: string): Promise<GeoPoint | null> {

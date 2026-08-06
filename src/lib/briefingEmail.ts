@@ -35,9 +35,18 @@ function renderWeather(weather: BriefingResponse["weather"], locationLabel: stri
   const location = locationLabel
     ? `<p style="margin:0 0 8px;color:#94a3b8;font-size:12px;">${escapeHtml(locationLabel)} 기준</p>`
     : "";
+  const alerts = weather.alerts
+    .map(
+      (alert) =>
+        `<p style="margin:0 0 6px;padding:8px 12px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;color:#b91c1c;font-size:13px;font-weight:600;">
+          ⚠️ ${escapeHtml(alert.title)}${alert.regions ? `<span style="font-weight:400;color:#dc2626;"> — ${escapeHtml(alert.regions)}</span>` : ""}
+        </p>`
+    )
+    .join("");
 
   return `
     <div style="border:1px solid #e2e8f0;border-radius:12px;padding:16px;">
+      ${alerts}
       ${location}
       <table role="presentation" width="100%"><tr>
         <td style="width:48px;font-size:36px;vertical-align:top;">${weather.icon}</td>

@@ -1,4 +1,5 @@
 import { getKV, setKV } from "./db";
+import type { WeatherAlert } from "./weatherAlerts";
 
 export interface WeatherInfo {
   icon: string;
@@ -13,6 +14,9 @@ export interface WeatherInfo {
     pm10: number | null;
     label: string | null;
   } | null;
+  /** Active KMA advisories for this location. Always [] here — getWeather()
+   *  only calls Open-Meteo; getBriefingData() merges in the real alerts. */
+  alerts: WeatherAlert[];
 }
 
 const CACHE_TTL_SECONDS = 1800; // 30 minutes
@@ -149,6 +153,7 @@ export async function getWeather(lat: number, lng: number): Promise<WeatherInfo 
       precipitationProbability: forecast.daily?.precipitation_probability_max?.[0] ?? null,
       rainStartTime: findRainStartTime(forecast.hourly, nowEpochSeconds),
       airQuality: null,
+      alerts: [],
     };
 
     if (airRes.ok) {

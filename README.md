@@ -14,7 +14,8 @@
 - **주식 현황** — 설정에서 등록한 관심 종목의 실시간에 가까운 시세와 종목명 (해외: Finnhub,
   국내: Naver 금융), 장중/장마감 여부와 다음 개장·마감 시각(KST 기준)까지 함께 표시
 - **오늘 날씨** — 날씨 아이콘, 최고/최저기온, 강수확률, 미세먼지(PM2.5), 비/눈이 예상되면 시작
-  시각까지 표시 (Open-Meteo, 키 불필요)
+  시각까지 표시 (Open-Meteo, 키 불필요). 기상청 공식 기상특보(호우/강풍/한파 등 주의보·경보)가
+  현재 위치에 발효 중이면 날씨 카드 상단에 빨간 배너로 표시 (기상청 특보 API, 무료 키 필요)
 - **주요 뉴스** — 국가/키워드 기준 헤드라인 (Google 뉴스 RSS, 키 불필요)
 - **이동 경로/시간** — 일정에 장소가 있으면 예상 자동차 이동 시간·거리·출발 시각(Kakao)과
   지도 링크를 함께 표시. 일정 등록 시 장소는 Kakao 검색 자동완성으로 입력해 오탈자로 인한
@@ -61,6 +62,7 @@
 | 뉴스 | 없음 (Google 뉴스 RSS, 키/가입 불필요) | - |
 | 이동 경로 | [Kakao Developers](https://developers.kakao.com) | 앱 생성 → Local + 길찾기(Directions) 제품 활성화 → REST API 키 |
 | 날씨 | 없음 (Open-Meteo, 키/가입 불필요) | 집 주소(`HOME_ADDRESS`)와 `KAKAO_REST_API_KEY`가 있어야 좌표 변환 후 조회됩니다 |
+| 기상특보 | [data.go.kr](https://www.data.go.kr) 무료 가입 | "기상특보" 검색 → 기상청 **기상특보 조회서비스** 활용신청(보통 즉시 승인) → 일반 인증키(Decoding) |
 | 이메일 브리핑 | [resend.com](https://resend.com) 무료 가입 | 받을 이메일 주소(예: `soonsang0217@naver.com`)로 가입 → API 키 |
 
 Google OAuth 클라이언트의 **승인된 리디렉션 URI**는 3단계에서 Vercel이 발급해주는 주소를
@@ -80,6 +82,7 @@ Google OAuth 클라이언트의 **승인된 리디렉션 URI**는 3단계에서 
    - `ALLOWED_EMAIL`, `SESSION_SECRET`(`openssl rand -base64 32` 또는 아무 긴 무작위 문자열)
    - `FINNHUB_API_KEY`, `STOCK_SYMBOLS`, `NEWS_COUNTRY`, `NEWS_QUERY`
    - `KAKAO_REST_API_KEY`, `HOME_ADDRESS`
+   - `KMA_WARNING_API_KEY` — 비워두면 기상특보 배너만 비활성화됩니다
    - `RESEND_API_KEY`, `BRIEFING_EMAIL_TO`(=`soonsang0217@naver.com`), `CRON_SECRET`(`openssl
      rand -base64 32`) — 매일 아침 이메일 브리핑용. 비워두면 이메일 발송 기능만 비활성화됩니다
 4. **Deploy** 클릭 → 몇 분 내 `https://<프로젝트명>.vercel.app` 주소 발급
@@ -105,6 +108,11 @@ Google OAuth 클라이언트의 **승인된 리디렉션 URI**는 3단계에서 
 > 주식의 장중/장마감 판정은 정규장 시간(미국 09:30–16:00 ET, 한국 09:00–15:30 KST, 평일)만
 > 반영하며 공휴일 캘린더는 반영하지 않습니다 — 휴장일에는 실제로는 휴장인데도 "장중"으로
 > 표시될 수 있습니다.
+>
+> 기상특보는 기상청의 전국 통합 발효 현황 문구를 현재 위치의 시/도·시/군/구 이름과
+> 텍스트로 대조해서 관련 여부를 판단합니다. 정식 특보구역 코드 기반 조회가 아니라
+> 근사치 매칭이라, 같은 시/도 내 다른 지역 특보가 표시되거나 드물게 관련 특보를 놓칠
+> 수 있습니다.
 
 ### 5) 매일 아침 이메일 브리핑 설정 (선택)
 

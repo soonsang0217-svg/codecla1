@@ -15,6 +15,22 @@ export default function WeatherCard({ weather }: { weather: WeatherInfo | null }
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      {weather.alerts.length > 0 && (
+        <div className="mb-3 space-y-1.5">
+          {weather.alerts.map((alert, i) => (
+            <p
+              key={i}
+              className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700"
+            >
+              ⚠️ {alert.title}
+              {alert.regions && (
+                <span className="ml-1 font-normal text-red-600">— {alert.regions}</span>
+              )}
+            </p>
+          ))}
+        </div>
+      )}
+
       <div className="flex items-center gap-3">
         <span className="text-4xl leading-none">{weather.icon}</span>
         <div>
