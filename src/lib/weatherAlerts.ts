@@ -242,6 +242,12 @@ function resolveQueryAreaCodes(region: RegionInfo): string[] {
   const preciseCode = resolvePreciseSubRegionCode(leafCode, region.region2, region.region3);
   if (preciseCode) {
     codes.add(preciseCode);
+    // Some cities (인천, 세종) have an intermediate node between the leaf
+    // and the precise sub-region (e.g. 인천 -> 인천(본토) -> 인천남부) that a
+    // warning could be tagged at directly — collectAncestors(preciseCode)
+    // walks all the way back past leafCode anyway, so re-adding is a no-op
+    // for cities without that extra layer.
+    for (const ancestor of collectAncestors(preciseCode)) codes.add(ancestor);
     for (const descendant of collectDescendants(preciseCode)) codes.add(descendant);
   } else {
     for (const descendant of collectDescendants(leafCode)) codes.add(descendant);
