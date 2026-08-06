@@ -159,8 +159,18 @@ export async function geocodeAddress(query: string): Promise<GeoPoint | null> {
 }
 
 interface KakaoCoord2AddressDoc {
-  address?: { address_name: string; region_1depth_name?: string; region_2depth_name?: string };
-  road_address?: { address_name: string; region_1depth_name?: string; region_2depth_name?: string };
+  address?: {
+    address_name: string;
+    region_1depth_name?: string;
+    region_2depth_name?: string;
+    region_3depth_name?: string;
+  };
+  road_address?: {
+    address_name: string;
+    region_1depth_name?: string;
+    region_2depth_name?: string;
+    region_3depth_name?: string;
+  };
 }
 
 interface KakaoCoord2AddressResponse {
@@ -173,6 +183,8 @@ export interface RegionInfo {
   region1: string;
   /** 시/군/구, e.g. "안산시" or "천안시 서북구". */
   region2: string;
+  /** 읍/면/동, e.g. "두정동". */
+  region3: string;
 }
 
 async function fetchRegionInfo(lat: number, lng: number): Promise<RegionInfo | null> {
@@ -195,9 +207,10 @@ async function fetchRegionInfo(lat: number, lng: number): Promise<RegionInfo | n
     const address = doc?.road_address?.address_name || doc?.address?.address_name;
     const region1 = doc?.address?.region_1depth_name || doc?.road_address?.region_1depth_name;
     const region2 = doc?.address?.region_2depth_name || doc?.road_address?.region_2depth_name;
+    const region3 = doc?.address?.region_3depth_name || doc?.road_address?.region_3depth_name;
     if (!address || !region1) return null;
 
-    const info: RegionInfo = { address, region1, region2: region2 ?? "" };
+    const info: RegionInfo = { address, region1, region2: region2 ?? "", region3: region3 ?? "" };
     await setKV(cacheKey, info, GEOCODE_CACHE_TTL_SECONDS);
     return info;
   } catch (err) {

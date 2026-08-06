@@ -1,7 +1,8 @@
 import { XMLParser } from "fast-xml-parser";
 import { getKV, setKV } from "./db";
-import { reverseGeocodeRegions } from "./directions";
+import { reverseGeocodeRegions, type RegionInfo } from "./directions";
 import { KMA_REGIONS, type KmaRegion } from "./kmaRegions";
+import { KMA_SUBREGION_SPLITS } from "./kmaSubRegions";
 
 export interface WeatherAlert {
   /** e.g. "폭염경보" */
@@ -85,15 +86,76 @@ function findProvinceCode(region1: string): string | null {
   return entry?.code ?? null;
 }
 
-// Kakao's region_2depth_name comes back as e.g. "안산시" or "천안시 서북구" —
-// take the first token and drop the trailing 시/군/구 to match KMA's plain
-// city name style (e.g. "안산", "천안").
-function cityKeyword(region2: string): string | null {
+// Kakao's region_2depth_name comes back as e.g. "안산시" or "천안시 서북구".
+// Most KMA_REGIONS city entries drop the 시/군/구 suffix ("안산", "천안"),
+// but a few keep it because the bare form would collide with something else
+// ("제주시(산지 제외)", "서귀포시(산지 제외)" — "제주"/"서귀포" alone would be
+// ambiguous with the province). Try both forms rather than guessing which.
+function cityKeywordCandidates(region2: string): string[] {
   const firstToken = region2.trim().split(/\s+/)[0];
-  if (!firstToken) return null;
+  if (!firstToken) return [];
   const stripped = firstToken.replace(/(시|군|구)$/, "");
-  return stripped || null;
+  return stripped && stripped !== firstToken ? [firstToken, stripped] : [firstToken];
 }
+
+function pickBestCandidate(candidates: KmaRegion[], provinceCode: string | null): string {
+  if (candidates.length === 1) return candidates[0].code;
+  if (provinceCode) {
+    const match = candidates.find((r) => isDescendantOf(r, provinceCode));
+    if (match) return match.code;
+  }
+  return candidates[0].code;
+}
+
+// Some city names are reused across provinces (e.g. "광주" is both
+// 광주광역시 and 경기도 광주시; "고성" is both 강원도 and 경상남도) — prefer
+// whichever candidate actually descends from the already-resolved province.
+function findCityCode(region2: string, provinceCode: string | null): string | null {
+  const candidates = cityKeywordCandidates(region2);
+  if (candidates.length === 0) return null;
+
+  for (const candidate of candidates) {
+    const exact = KMA_REGIONS.filter((r) => r.name === candidate);
+    if (exact.length > 0) return pickBestCandidate(exact, provinceCode);
+  }
+  // Fallback for entries with no bare-name node at all, only a qualified
+  // one — e.g. "신안" only exists as "신안(흑산면제외)" in the table.
+  for (const candidate of candidates) {
+    const prefixed = KMA_REGIONS.filter((r) => r.name.startsWith(`${candidate}(`));
+    if (prefixed.length > 0) return pickBestCandidate(prefixed, provinceCode);
+  }
+  return null;
+}
+
+// Given the most specific area code already resolved (a city, or a metro
+// resolved at 시/도 level), checks whether that area is one KMA further
+// splits (KMA_SUBREGION_SPLITS, transcribed from KMA's own 세분구역 guide)
+// and if so, matches the exact 구/읍/면/동 (region2 or region3, whichever
+// the split is defined at) to pick the single precise sub-area code —
+// e.g. 인천 -> 미추홀구 -> 인천남부, not "wherever in 인천".
+function resolvePreciseSubRegionCode(leafCode: string, region2: string, region3: string): string | null {
+  const leaf = REGIONS_BY_CODE.get(leafCode);
+  if (!leaf) return null;
+
+  const rules = SUBREGION_SPLITS_BY_PARENT.get(leaf.name);
+  if (!rules) return null;
+
+  // For cities with their own 구 (청주시 상당구, 천안시 서북구, ...), Kakao's
+  // region_2depth_name is the compound "OO시 OO구" — the split rules list
+  // just the district ("상당구"), so match on the last token, which is
+  // exactly the district in both the compound and plain ("미추홀구") cases.
+  const district = region2.trim().split(/\s+/).at(-1) ?? region2;
+
+  const descendants = collectDescendants(leafCode);
+  for (const rule of rules) {
+    if (!rule.districts.includes(district) && !rule.districts.includes(region3)) continue;
+    const match = descendants.find((code) => REGIONS_BY_CODE.get(code)?.name === rule.sub);
+    if (match) return match;
+  }
+  return null;
+}
+
+const SUBREGION_SPLITS_BY_PARENT = new Map(KMA_SUBREGION_SPLITS.map((s) => [s.parent, s.rules]));
 
 function isDescendantOf(region: KmaRegion, ancestorCode: string): boolean {
   let current: KmaRegion | undefined = region;
@@ -105,22 +167,87 @@ function isDescendantOf(region: KmaRegion, ancestorCode: string): boolean {
   return false;
 }
 
-// Some city names are reused across provinces (e.g. "광주" is both
-// 광주광역시 and 경기도 광주시; "고성" is both 강원도 and 경상남도) — prefer
-// whichever candidate actually descends from the already-resolved province.
-function findCityCode(region2: string, provinceCode: string | null): string | null {
-  const city = cityKeyword(region2);
-  if (!city) return null;
+const CHILDREN_BY_PARENT = new Map<string, string[]>();
+for (const r of KMA_REGIONS) {
+  if (!r.parent) continue;
+  const siblings = CHILDREN_BY_PARENT.get(r.parent) ?? [];
+  siblings.push(r.code);
+  CHILDREN_BY_PARENT.set(r.parent, siblings);
+}
 
-  const candidates = KMA_REGIONS.filter((r) => r.name === city);
-  if (candidates.length === 0) return null;
-  if (candidates.length === 1) return candidates[0].code;
-
-  if (provinceCode) {
-    const match = candidates.find((r) => isDescendantOf(r, provinceCode));
-    if (match) return match.code;
+/** All descendants at any depth — e.g. 인천 → 강화/옹진/인천(본토) → 인천남부/북부. */
+function collectDescendants(code: string): string[] {
+  const result: string[] = [];
+  const queue = [...(CHILDREN_BY_PARENT.get(code) ?? [])];
+  while (queue.length > 0) {
+    const next = queue.shift()!;
+    result.push(next);
+    queue.push(...(CHILDREN_BY_PARENT.get(next) ?? []));
   }
-  return candidates[0].code;
+  return result;
+}
+
+function collectAncestors(code: string): string[] {
+  const result: string[] = [];
+  let current = REGIONS_BY_CODE.get(code);
+  let guard = 0;
+  while (current?.parent && guard++ < 10) {
+    result.push(current.parent);
+    current = REGIONS_BY_CODE.get(current.parent);
+  }
+  return result;
+}
+
+// The 8 metro cities double as both a 시/도-level entity *and* their own
+// city — KMA further splits several of them by compass direction (부산동부,
+// 서울동남권, 인천남부, ...) as direct/indirect children of this same code.
+const METRO_CODES = new Set([
+  "L1100000", // 서울
+  "L1150000", // 부산
+  "L1140000", // 대구
+  "L1110000", // 인천
+  "L1130000", // 광주
+  "L1120000", // 대전
+  "L1160000", // 울산
+  "L1170000", // 세종
+]);
+
+/**
+ * Builds the full set of area codes worth checking for a location: every
+ * ancestor up to 전국 (so a province- or nationwide-scoped warning isn't
+ * missed), plus the most specific area resolved for this location. When
+ * that area is one KMA splits further (KMA_SUBREGION_SPLITS), the exact
+ * 구/읍/면/동 pins down a single precise sub-area code instead of every
+ * sibling sub-region; only when no precise rule matches (or the area isn't
+ * split at all beyond what's already been resolved) does it fall back to
+ * every descendant, so a finer warning still isn't silently missed. This
+ * never pulls in sibling cities the way expanding a whole province would.
+ */
+function resolveQueryAreaCodes(region: RegionInfo): string[] {
+  const provinceCode = findProvinceCode(region.region1);
+  const cityCode = findCityCode(region.region2, provinceCode);
+
+  const codes = new Set<string>([NATIONWIDE_CODE]);
+  if (provinceCode) {
+    codes.add(provinceCode);
+    for (const ancestor of collectAncestors(provinceCode)) codes.add(ancestor);
+  }
+
+  // A metro city (서울, 부산, ...) doubles as its own 시/도-level entity, so
+  // it's a valid "leaf" to refine even without a separate city-level match.
+  const leafCode = cityCode ?? (provinceCode && METRO_CODES.has(provinceCode) ? provinceCode : null);
+  if (!leafCode) return [...codes];
+  codes.add(leafCode);
+
+  const preciseCode = resolvePreciseSubRegionCode(leafCode, region.region2, region.region3);
+  if (preciseCode) {
+    codes.add(preciseCode);
+    for (const descendant of collectDescendants(preciseCode)) codes.add(descendant);
+  } else {
+    for (const descendant of collectDescendants(leafCode)) codes.add(descendant);
+  }
+
+  return [...codes];
 }
 
 function formatYmdKst(date: Date): string {
@@ -213,10 +340,11 @@ function determineActiveAlerts(items: KmaPwnCdItem[]): WeatherAlert[] {
 /**
  * Currently active KMA (기상청) advisories/warnings for the given
  * coordinates, resolved via the official 특보구역코드 table rather than
- * text-matching the nationwide bulletin. Reverse-geocodes to a 시/도 +
- * 시/군/구, resolves both to their KMA area codes, and queries both (a
- * warning can be issued at either granularity) over the last two weeks to
- * reliably catch a still-active multi-day advisory.
+ * text-matching the nationwide bulletin. Queries every area code on this
+ * location's path through the region hierarchy — ancestors (시/도, 전국)
+ * plus the precisely (or, failing that, broadly) resolved city/metro area —
+ * over the last two weeks to reliably catch a still-active multi-day
+ * advisory.
  */
 export async function getActiveWeatherAlerts(lat: number, lng: number): Promise<WeatherAlert[]> {
   const apiKey = process.env.KMA_WARNING_API_KEY;
@@ -225,9 +353,7 @@ export async function getActiveWeatherAlerts(lat: number, lng: number): Promise<
   const region = await reverseGeocodeRegions(lat, lng);
   if (!region) return [];
 
-  const provinceCode = findProvinceCode(region.region1);
-  const cityCode = findCityCode(region.region2, provinceCode);
-  const areaCodes = [...new Set([provinceCode, cityCode].filter((c): c is string => !!c))];
+  const areaCodes = resolveQueryAreaCodes(region);
   if (areaCodes.length === 0) return [];
 
   const now = new Date();
