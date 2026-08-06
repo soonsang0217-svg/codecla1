@@ -77,10 +77,18 @@ interface NaverBasicResponse {
   compareToPreviousClosePrice: string; // comma-formatted, unsigned
   compareToPreviousPrice: NaverDirection;
   fluctuationsRatio: string; // percent, unsigned
-  // Not confirmed present on this endpoint — parsed defensively; the day-range
-  // bar just won't render for a quote when these come back undefined.
-  highPrice?: string;
-  lowPrice?: string;
+}
+
+// /basic has no high/low; /integration's totalInfos carries them as a flat
+// list of {code, value} rows (alongside PER, market cap, etc.) instead of
+// dedicated fields — verified against a live response.
+interface NaverTotalInfoItem {
+  code: string;
+  value: string;
+}
+
+interface NaverIntegrationResponse {
+  totalInfos?: NaverTotalInfoItem[];
 }
 
 function parseNaverNumber(value: string): number {
@@ -92,21 +100,41 @@ function naverSign(code: string): 1 | -1 {
   return code === "4" || code === "5" ? -1 : 1;
 }
 
+async function fetchNaverDayRange(code: string): Promise<{ high: number | null; low: number | null }> {
+  try {
+    const res = await fetch(`https://m.stock.naver.com/api/stock/${code}/integration`, {
+      cache: "no-store",
+    });
+    if (!res.ok) throw new Error(`Naver Finance returned ${res.status}`);
+    const data = (await res.json()) as NaverIntegrationResponse;
+
+    const findValue = (infoCode: string) =>
+      data.totalInfos?.find((item) => item.code === infoCode)?.value;
+
+    const high = findValue("highPrice");
+    const low = findValue("lowPrice");
+    return {
+      high: high ? parseNaverNumber(high) : null,
+      low: low ? parseNaverNumber(low) : null,
+    };
+  } catch (err) {
+    console.error(`Failed to fetch Naver day range for ${code}`, err);
+    return { high: null, low: null };
+  }
+}
+
 async function fetchNaverQuote(code: string): Promise<StockQuote> {
   const cacheKey = `stock:${code}`;
   const cached = await getKV<StockQuote>(cacheKey);
   if (cached) return cached;
 
   try {
-    const res = await fetch(`https://m.stock.naver.com/api/stock/${code}/basic`, {
-      cache: "no-store",
-    });
-    if (!res.ok) throw new Error(`Naver Finance returned ${res.status}`);
-    const data = (await res.json()) as NaverBasicResponse;
-
-    // Confirms whether highPrice/lowPrice actually exist on this endpoint —
-    // check Vercel's Runtime Logs if the day-range bar isn't showing for KR stocks.
-    console.log(`Naver quote for ${code}: highPrice=${data.highPrice} lowPrice=${data.lowPrice}`);
+    const [basicRes, dayRange] = await Promise.all([
+      fetch(`https://m.stock.naver.com/api/stock/${code}/basic`, { cache: "no-store" }),
+      fetchNaverDayRange(code),
+    ]);
+    if (!basicRes.ok) throw new Error(`Naver Finance returned ${basicRes.status}`);
+    const data = (await basicRes.json()) as NaverBasicResponse;
 
     const sign = naverSign(data.compareToPreviousPrice?.code ?? "3");
     const price = parseNaverNumber(data.closePrice);
@@ -120,8 +148,8 @@ async function fetchNaverQuote(code: string): Promise<StockQuote> {
       change,
       changePercent,
       previousClose: price - change,
-      dayLow: data.lowPrice ? parseNaverNumber(data.lowPrice) : null,
-      dayHigh: data.highPrice ? parseNaverNumber(data.highPrice) : null,
+      dayLow: dayRange.low,
+      dayHigh: dayRange.high,
     };
     await setKV(cacheKey, quote, CACHE_TTL_SECONDS);
     return quote;
