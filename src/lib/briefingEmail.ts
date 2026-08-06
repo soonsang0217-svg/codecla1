@@ -116,14 +116,23 @@ function renderStocks(stocks: BriefingResponse["stocks"]): string {
           const up = (quote.changePercent ?? 0) >= 0;
           const color = up ? "#dc2626" : "#2563eb";
           const sign = up ? "+" : "";
+          const subLabel = [quote.name ? quote.symbol : null, quote.marketStatusLabel]
+            .filter((part): part is string => !!part)
+            .map(escapeHtml)
+            .join(" · ");
           return `
             <tr style="border-bottom:1px solid #f1f5f9;">
-              <td style="padding:8px 0;font-size:14px;color:#0f172a;font-weight:600;">${escapeHtml(quote.symbol)}</td>
-              <td style="padding:8px 0;font-size:14px;text-align:right;color:#0f172a;">${
-                quote.price != null ? quote.price.toLocaleString("ko-KR") : "-"
-              }</td>
-              <td style="padding:8px 0 8px 12px;font-size:13px;text-align:right;color:${color};white-space:nowrap;">
-                ${quote.changePercent != null ? `${sign}${quote.changePercent.toFixed(2)}%` : "-"}
+              <td style="padding:8px 0;">
+                <div style="font-size:14px;color:#0f172a;font-weight:600;">${escapeHtml(quote.name || quote.symbol)}</div>
+                ${subLabel ? `<div style="font-size:11px;color:#94a3b8;">${subLabel}</div>` : ""}
+              </td>
+              <td style="padding:8px 0 8px 12px;text-align:right;white-space:nowrap;">
+                <div style="font-size:14px;color:#0f172a;">${
+                  quote.price != null ? quote.price.toLocaleString("ko-KR") : "-"
+                }</div>
+                <div style="font-size:13px;color:${color};">
+                  ${quote.changePercent != null ? `${sign}${quote.changePercent.toFixed(2)}%` : "-"}
+                </div>
               </td>
             </tr>
           `;

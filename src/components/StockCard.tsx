@@ -25,6 +25,9 @@ export default function StockCard({ quote }: { quote: StockQuote }) {
         {quote.change?.toFixed(2)} ({sign}
         {quote.changePercent?.toFixed(2)}%)
       </p>
+      {quote.marketStatusLabel && (
+        <p className="mt-1 text-xs text-slate-400">{quote.marketStatusLabel}</p>
+      )}
       {quote.dayLow != null && quote.dayHigh != null && (
         <DayRangeBar low={quote.dayLow} high={quote.dayHigh} current={quote.price} up={up} />
       )}

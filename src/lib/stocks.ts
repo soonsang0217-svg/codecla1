@@ -1,4 +1,5 @@
 import { getKV, setKV } from "./db";
+import { formatMarketStatusLabel, getMarketStatus } from "./marketHours";
 
 export interface StockQuote {
   symbol: string;
@@ -10,11 +11,21 @@ export interface StockQuote {
   /** Today's low/high, when the source provides them — powers the day-range bar. */
   dayLow?: number | null;
   dayHigh?: number | null;
+  isMarketOpen: boolean;
+  /** e.g. "장중 · 15:30 마감" or "장마감 · 8/7 09:00 개장", always in KST. */
+  marketStatusLabel: string;
   error?: string;
 }
 
+// The raw per-source quote, before market-open/close status (computed fresh
+// on every call in getStockQuotes, not cached) is merged in.
+type QuoteData = Omit<StockQuote, "isMarketOpen" | "marketStatusLabel">;
+
 const CACHE_TTL_SECONDS = 60;
 const KOREAN_STOCK_CODE = /^\d{6}$/;
+// Company names essentially never change, so this is cached far longer than
+// the price itself to avoid re-hitting Finnhub's profile endpoint every load.
+const NAME_CACHE_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 days
 
 interface FinnhubQuote {
   c: number; // current price
@@ -25,16 +36,44 @@ interface FinnhubQuote {
   pc: number; // previous close
 }
 
-async function fetchFinnhubQuote(symbol: string, apiKey: string): Promise<StockQuote> {
-  const cacheKey = `stock:${symbol}`;
-  const cached = await getKV<StockQuote>(cacheKey);
+interface FinnhubProfile {
+  name?: string;
+}
+
+async function fetchFinnhubName(symbol: string, apiKey: string): Promise<string | undefined> {
+  const cacheKey = `stock-name:${symbol}`;
+  const cached = await getKV<string>(cacheKey);
   if (cached) return cached;
 
   try {
     const res = await fetch(
-      `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbol)}&token=${apiKey}`,
+      `https://finnhub.io/api/v1/stock/profile2?symbol=${encodeURIComponent(symbol)}&token=${apiKey}`,
       { cache: "no-store" }
     );
+    if (!res.ok) throw new Error(`Finnhub profile returned ${res.status}`);
+    const data = (await res.json()) as FinnhubProfile;
+    if (!data.name) return undefined;
+
+    await setKV(cacheKey, data.name, NAME_CACHE_TTL_SECONDS);
+    return data.name;
+  } catch (err) {
+    console.error(`Failed to fetch Finnhub company name for ${symbol}`, err);
+    return undefined;
+  }
+}
+
+async function fetchFinnhubQuote(symbol: string, apiKey: string): Promise<QuoteData> {
+  const cacheKey = `stock:${symbol}`;
+  const cached = await getKV<QuoteData>(cacheKey);
+  if (cached) return cached;
+
+  try {
+    const [res, name] = await Promise.all([
+      fetch(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbol)}&token=${apiKey}`, {
+        cache: "no-store",
+      }),
+      fetchFinnhubName(symbol, apiKey),
+    ]);
     if (!res.ok) throw new Error(`Finnhub returned ${res.status}`);
     const data = (await res.json()) as FinnhubQuote;
 
@@ -42,8 +81,9 @@ async function fetchFinnhubQuote(symbol: string, apiKey: string): Promise<StockQ
       throw new Error("symbol not found");
     }
 
-    const quote: StockQuote = {
+    const quote: QuoteData = {
       symbol,
+      name,
       price: data.c,
       change: data.d,
       changePercent: data.dp,
@@ -123,9 +163,9 @@ async function fetchNaverDayRange(code: string): Promise<{ high: number | null; 
   }
 }
 
-async function fetchNaverQuote(code: string): Promise<StockQuote> {
+async function fetchNaverQuote(code: string): Promise<QuoteData> {
   const cacheKey = `stock:${code}`;
-  const cached = await getKV<StockQuote>(cacheKey);
+  const cached = await getKV<QuoteData>(cacheKey);
   if (cached) return cached;
 
   try {
@@ -141,7 +181,7 @@ async function fetchNaverQuote(code: string): Promise<StockQuote> {
     const change = sign * Math.abs(parseNaverNumber(data.compareToPreviousClosePrice));
     const changePercent = sign * Math.abs(parseNaverNumber(data.fluctuationsRatio));
 
-    const quote: StockQuote = {
+    const quote: QuoteData = {
       symbol: code,
       name: data.stockName,
       price,
@@ -166,25 +206,40 @@ async function fetchNaverQuote(code: string): Promise<StockQuote> {
   }
 }
 
+function withMarketStatus(quote: QuoteData, isKorean: boolean): StockQuote {
+  const now = new Date();
+  const status = getMarketStatus(isKorean ? "KR" : "US", now);
+  return {
+    ...quote,
+    isMarketOpen: status.isOpen,
+    marketStatusLabel: formatMarketStatusLabel(status, now),
+  };
+}
+
 export async function getStockQuotes(symbols: string[]): Promise<StockQuote[]> {
   const apiKey = process.env.FINNHUB_API_KEY;
 
   return Promise.all(
-    symbols.map((symbol) => {
-      if (KOREAN_STOCK_CODE.test(symbol)) {
-        return fetchNaverQuote(symbol);
+    symbols.map(async (symbol) => {
+      const isKorean = KOREAN_STOCK_CODE.test(symbol);
+
+      if (isKorean) {
+        return withMarketStatus(await fetchNaverQuote(symbol), true);
       }
       if (!apiKey) {
-        return Promise.resolve<StockQuote>({
-          symbol,
-          price: null,
-          change: null,
-          changePercent: null,
-          previousClose: null,
-          error: "FINNHUB_API_KEY not configured",
-        });
+        return withMarketStatus(
+          {
+            symbol,
+            price: null,
+            change: null,
+            changePercent: null,
+            previousClose: null,
+            error: "FINNHUB_API_KEY not configured",
+          },
+          false
+        );
       }
-      return fetchFinnhubQuote(symbol, apiKey);
+      return withMarketStatus(await fetchFinnhubQuote(symbol, apiKey), false);
     })
   );
 }
