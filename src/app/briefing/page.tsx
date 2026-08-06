@@ -18,8 +18,12 @@ type TaskModalState = "closed" | "new" | { task: BriefingTask };
 
 // Best-effort: resolves to the browser's current coordinates, or null if the
 // user denies/ignores the permission prompt or the browser doesn't support
-// it. Never rejects, and never blocks the briefing load for long.
-function getCurrentPosition(timeoutMs = 5000): Promise<GeolocationPosition | null> {
+// it. Never rejects. The timeout has to cover the permission prompt itself,
+// not just the location fix — on a first-ever grant, the time the user
+// spends tapping "Allow" counts against it too, so 5s was cutting it close
+// and silently falling back to the home address even after the user granted
+// permission.
+function getCurrentPosition(timeoutMs = 15000): Promise<GeolocationPosition | null> {
   return new Promise((resolve) => {
     if (typeof navigator === "undefined" || !navigator.geolocation) {
       resolve(null);
@@ -43,11 +47,14 @@ export default function BriefingPage() {
   const [sendingEmail, setSendingEmail] = useState(false);
   const [emailMessage, setEmailMessage] = useState<{ text: string; error: boolean } | null>(null);
   const [showCompletedTasks, setShowCompletedTasks] = useState(false);
+  const [locating, setLocating] = useState(false);
 
   const load = useCallback(async () => {
     setError(null);
+    setLocating(true);
     try {
       const position = await getCurrentPosition();
+      setLocating(false);
       const url = position
         ? `/api/briefing?lat=${position.coords.latitude}&lng=${position.coords.longitude}`
         : "/api/briefing";
@@ -71,6 +78,7 @@ export default function BriefingPage() {
       setError(err instanceof Error ? err.message : "알 수 없는 오류");
     } finally {
       setLoading(false);
+      setLocating(false);
     }
   }, [router]);
 
@@ -236,14 +244,25 @@ export default function BriefingPage() {
       )}
 
       <section className="mb-6">
-        <div className="mb-3 flex items-center gap-2">
+        <div className="mb-3 flex flex-wrap items-center gap-2">
           <h2 className="text-lg font-bold text-slate-900">오늘 날씨</h2>
           {data && (
             <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">
-              {data.locationSource === "current" ? "현재 위치 기준" : "집 주소 기준"}
-              {data.locationLabel && ` · ${data.locationLabel}`}
+              {locating
+                ? "위치 확인 중..."
+                : data.locationSource === "current"
+                  ? "현재 위치 기준"
+                  : "집 주소 기준"}
+              {!locating && data.locationLabel && ` · ${data.locationLabel}`}
             </span>
           )}
+          <button
+            onClick={load}
+            disabled={locating}
+            className="text-xs font-medium text-blue-600 hover:underline disabled:cursor-not-allowed disabled:text-slate-400 disabled:no-underline"
+          >
+            {locating ? "확인 중..." : "현재 위치 다시 확인"}
+          </button>
         </div>
         <WeatherCard weather={data?.weather ?? null} />
       </section>
@@ -332,7 +351,7 @@ export default function BriefingPage() {
                   : `완료된 할 일 보기 (${data.completedTasks.length})`}
               </button>
               {showCompletedTasks && (
-                <div className="mt-2 space-y-2">
+                <div className="mt-2 max-h-64 space-y-2 overflow-y-auto rounded-xl border border-slate-100 p-2">
                   {data.completedTasks.map((task) => (
                     <div
                       key={task.id}
