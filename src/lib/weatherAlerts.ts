@@ -292,8 +292,20 @@ interface KmaPwnCdItem {
 
 interface KmaPwnCdResponse {
   response?: {
+    header?: { resultCode?: string; resultMsg?: string };
     body?: {
       items?: { item?: KmaPwnCdItem | KmaPwnCdItem[] };
+    };
+  };
+  // data.go.kr's *other* error shape: auth/param failures often return
+  // HTTP 200 with this envelope instead of the normal <response> one — no
+  // `body`, so the old code silently read it as "zero items" with nothing
+  // in the logs to show the request had actually failed.
+  OpenAPI_ServiceResponse?: {
+    cmmMsgHeader?: {
+      errMsg?: string;
+      returnAuthMsg?: string;
+      returnReasonCode?: string;
     };
   };
 }
@@ -317,8 +329,23 @@ async function fetchAreaEvents(
 
     const xml = await res.text();
     const data = parser.parse(xml) as KmaPwnCdResponse;
+
+    const commonError = data.OpenAPI_ServiceResponse?.cmmMsgHeader;
+    if (commonError) {
+      throw new Error(
+        `KMA API rejected the request: ${commonError.returnAuthMsg ?? commonError.errMsg} ` +
+          `(code ${commonError.returnReasonCode})`
+      );
+    }
+
+    const resultCode = data.response?.header?.resultCode;
+    if (resultCode && resultCode !== "00" && resultCode !== "0") {
+      throw new Error(`KMA getPwnCd resultCode=${resultCode} resultMsg=${data.response?.header?.resultMsg}`);
+    }
+
     const rawItem = data.response?.body?.items?.item;
     const items = rawItem ? (Array.isArray(rawItem) ? rawItem : [rawItem]) : [];
+    console.log(`KMA getPwnCd area=${areaCode} range=${fromTmFc}-${toTmFc} items=${items.length}`);
 
     await setKV(cacheKey, items, CACHE_TTL_SECONDS);
     return items;
@@ -367,12 +394,22 @@ function determineActiveAlerts(items: KmaPwnCdItem[]): WeatherAlert[] {
  */
 export async function getActiveWeatherAlerts(lat: number, lng: number): Promise<WeatherAlert[]> {
   const apiKey = process.env.KMA_WARNING_API_KEY;
-  if (!apiKey) return [];
+  if (!apiKey) {
+    console.log("Skipping weather alerts: KMA_WARNING_API_KEY not configured");
+    return [];
+  }
 
   const region = await reverseGeocodeRegions(lat, lng);
-  if (!region) return [];
+  if (!region) {
+    console.log(`Skipping weather alerts: reverse geocoding failed for ${lat},${lng}`);
+    return [];
+  }
 
   const areaCodes = resolveQueryAreaCodes(region);
+  console.log(
+    `Weather alerts for ${region.address}:`,
+    areaCodes.map((code) => `${code}(${REGIONS_BY_CODE.get(code)?.name})`).join(", ")
+  );
   if (areaCodes.length === 0) return [];
 
   const now = new Date();
