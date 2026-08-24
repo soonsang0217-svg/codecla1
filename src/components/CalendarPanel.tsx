@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { DayPicker } from "react-day-picker";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { DayPicker, type DayButtonProps } from "react-day-picker";
 import { ko } from "react-day-picker/locale";
 import "react-day-picker/style.css";
 import { format } from "date-fns";
@@ -15,6 +15,51 @@ interface CalendarEvent {
 
 function toDateKey(date: Date): string {
   return format(date, "yyyy-MM-dd");
+}
+
+const EventsByDateContext = createContext<Map<string, CalendarEvent[]>>(new Map());
+
+/** Day cell that highlights and labels dates with a registered interview schedule, instead of a barely-visible dot. */
+function EventDayButton({ day, modifiers, className, children, style: incomingStyle, ...rest }: DayButtonProps) {
+  const ref = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (modifiers.focused) ref.current?.focus();
+  }, [modifiers.focused]);
+
+  const eventsByDate = useContext(EventsByDateContext);
+  const dayEvents = eventsByDate.get(toDateKey(day.date)) ?? [];
+  const hasEvents = dayEvents.length > 0;
+
+  return (
+    <button
+      ref={ref}
+      type="button"
+      className={className}
+      {...rest}
+      // Inline styles always win over react-day-picker's own stylesheet
+      // regardless of CSS import order, unlike a CSS custom-property override.
+      // Spread after {...rest} so it isn't clobbered by the (undefined) style
+      // react-day-picker itself passes down.
+      style={{
+        ...incomingStyle,
+        width: 52,
+        height: 48,
+        borderRadius: 10,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        ...(hasEvents && { backgroundColor: "#c7d2fe", borderColor: "#6366f1", borderWidth: 1.5 }),
+      }}
+    >
+      <span className={"leading-tight" + (hasEvents ? " font-bold text-indigo-950" : "")}>{children}</span>
+      {hasEvents && (
+        <span className="mt-0.5 block max-w-full truncate px-0.5 text-[10px] font-bold leading-none text-indigo-800">
+          {dayEvents.length === 1 ? dayEvents[0].intervieweeName : `${dayEvents.length}건`}
+        </span>
+      )}
+    </button>
+  );
 }
 
 export default function CalendarPanel() {
@@ -41,7 +86,16 @@ export default function CalendarPanel() {
     })();
   }, []);
 
-  const eventDates = useMemo(() => events.map((e) => new Date(e.publishDate + "T00:00:00")), [events]);
+  const eventsByDate = useMemo(() => {
+    const map = new Map<string, CalendarEvent[]>();
+    for (const e of events) {
+      const list = map.get(e.publishDate) ?? [];
+      list.push(e);
+      map.set(e.publishDate, list);
+    }
+    return map;
+  }, [events]);
+
   const selectedKey = toDateKey(selected);
   const eventsOnSelected = events.filter((e) => e.publishDate === selectedKey);
 
@@ -88,15 +142,16 @@ export default function CalendarPanel() {
 
   return (
     <div className="grid gap-6 sm:grid-cols-[auto_1fr]">
-      <DayPicker
-        mode="single"
-        locale={ko}
-        selected={selected}
-        onSelect={(d) => d && setSelected(d)}
-        modifiers={{ hasEvent: eventDates }}
-        modifiersClassNames={{ hasEvent: "rdp-has-event" }}
-        className="rounded-lg border border-neutral-200 bg-white p-3"
-      />
+      <EventsByDateContext.Provider value={eventsByDate}>
+        <DayPicker
+          mode="single"
+          locale={ko}
+          selected={selected}
+          onSelect={(d) => d && setSelected(d)}
+          components={{ DayButton: EventDayButton }}
+          className="rdp-with-labels rounded-lg border border-neutral-200 bg-white p-3"
+        />
+      </EventsByDateContext.Provider>
       <div className="space-y-4">
         <div>
           <h3 className="text-sm font-medium text-neutral-700">{format(selected, "yyyy년 M월 d일")} 일정</h3>

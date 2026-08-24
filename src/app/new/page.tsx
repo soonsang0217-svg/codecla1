@@ -7,6 +7,8 @@ import type { GenerateOutput } from "@/lib/ai/types";
 
 const TRANSCRIPT_HINT = "업로드 가능 형식: .txt, .docx";
 const QUESTIONNAIRE_HINT = "업로드 가능 형식: .txt, .docx, .pdf";
+// 이 도구는 항상 업로드된 녹취록 전체를 대상으로 기사를 작성합니다.
+const SCOPE = "전체";
 
 interface FileSlot {
   fileName: string;
@@ -37,6 +39,7 @@ function FileDropInput({
   error,
   uploading,
   onFile,
+  onRemove,
 }: {
   label: string;
   hint: string;
@@ -45,6 +48,7 @@ function FileDropInput({
   error: string | null;
   uploading: boolean;
   onFile: (file: File) => void;
+  onRemove: () => void;
 }) {
   const inputId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -54,6 +58,8 @@ function FileDropInput({
     const file = files?.[0];
     if (file) onFile(file);
   }
+
+  const showUploaded = !!slot && !uploading;
 
   return (
     <div className="space-y-1.5">
@@ -80,13 +86,37 @@ function FileDropInput({
           handleFiles(e.dataTransfer.files);
         }}
         className={
-          "flex cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed px-4 py-6 text-center transition-colors " +
-          (dragging ? "border-neutral-900 bg-neutral-100" : "border-neutral-300 hover:border-neutral-400")
+          "rounded-lg border-2 border-dashed px-4 py-3 text-center transition-colors " +
+          (showUploaded
+            ? "cursor-default border-green-200 bg-green-50 py-2.5"
+            : "cursor-pointer py-6 " + (dragging ? "border-neutral-900 bg-neutral-100" : "border-neutral-300 hover:border-neutral-400"))
         }
       >
-        <p className="text-sm text-neutral-600">
-          파일을 여기로 <span className="font-medium text-neutral-900">드래그 앤 드롭</span>하거나 클릭해서 선택하세요
-        </p>
+        {showUploaded ? (
+          <div className="flex items-center justify-between gap-2 text-left">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium text-green-800">{slot.fileName}</p>
+              <p className="text-xs text-green-600">{slot.text.length.toLocaleString()}자 추출됨</p>
+            </div>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onRemove();
+                inputRef.current?.click();
+              }}
+              className="shrink-0 rounded border border-green-300 bg-white px-2 py-1 text-xs font-medium text-green-800 hover:bg-green-100"
+            >
+              파일 변경
+            </button>
+          </div>
+        ) : uploading ? (
+          <p className="text-sm text-neutral-500">업로드 중...</p>
+        ) : (
+          <p className="flex flex-col items-center gap-1 text-sm text-neutral-600">
+            파일을 여기로 <span className="font-medium text-neutral-900">드래그 앤 드롭</span>하거나 클릭해서 선택하세요
+          </p>
+        )}
         <input
           id={inputId}
           ref={inputRef}
@@ -101,10 +131,6 @@ function FileDropInput({
         />
       </div>
 
-      {uploading && <p className="text-xs text-neutral-400">업로드 중...</p>}
-      {slot && !uploading && (
-        <p className="text-xs text-green-700">업로드됨: {slot.fileName} ({slot.text.length.toLocaleString()}자 추출)</p>
-      )}
       {error && <p className="text-xs text-red-600">{error}</p>}
     </div>
   );
@@ -115,7 +141,6 @@ export default function NewInterviewPage() {
   const [step, setStep] = useState<2 | 3>(2);
 
   const [intervieweeName, setIntervieweeName] = useState("");
-  const [scope, setScope] = useState("전체");
   const [transcript, setTranscript] = useState<FileSlot | null>(null);
   const [transcriptError, setTranscriptError] = useState<string | null>(null);
   const [transcriptUploading, setTranscriptUploading] = useState(false);
@@ -166,7 +191,7 @@ export default function NewInterviewPage() {
         body: JSON.stringify({
           transcript: transcript.text,
           questionnaire: questionnaire?.text ?? "",
-          scope,
+          scope: SCOPE,
           intervieweeName,
         }),
       });
@@ -186,7 +211,12 @@ export default function NewInterviewPage() {
 
       {step === 2 && (
         <div className="space-y-5 rounded-lg border border-neutral-200 bg-white p-6">
-          <h1 className="text-lg font-semibold">업로드</h1>
+          <div>
+            <h1 className="text-lg font-semibold">업로드</h1>
+            <p className="mt-1 text-sm text-neutral-500">
+              업로드한 녹취록 전체를 대상으로 기사 초안을 만듭니다. 일부만 반영하고 싶다면, 필요한 부분만 담은 파일을 올려주세요.
+            </p>
+          </div>
 
           <FileDropInput
             label="인터뷰 녹취 텍스트"
@@ -196,6 +226,7 @@ export default function NewInterviewPage() {
             error={transcriptError}
             uploading={transcriptUploading}
             onFile={handleTranscriptFile}
+            onRemove={() => setTranscript(null)}
           />
           <FileDropInput
             label="질문지 (선택)"
@@ -205,24 +236,16 @@ export default function NewInterviewPage() {
             error={questionnaireError}
             uploading={questionnaireUploading}
             onFile={handleQuestionnaireFile}
+            onRemove={() => setQuestionnaire(null)}
           />
 
           <div className="space-y-1.5">
             <label className="text-sm font-medium text-neutral-800">인터뷰이 이름</label>
+            <p className="text-xs text-neutral-400">기사 제목, 저장 목록, 완료 후 워드 파일명에 쓰입니다.</p>
             <input
               value={intervieweeName}
               onChange={(e) => setIntervieweeName(e.target.value)}
               placeholder="예: 김민준"
-              className="w-full rounded border border-neutral-300 px-3 py-2 text-sm"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-neutral-800">작업 범위</label>
-            <input
-              value={scope}
-              onChange={(e) => setScope(e.target.value)}
-              placeholder='예: "전체", "질문 6번까지", "첨부한 분량까지"'
               className="w-full rounded border border-neutral-300 px-3 py-2 text-sm"
             />
           </div>
@@ -246,8 +269,6 @@ export default function NewInterviewPage() {
               <dl className="grid grid-cols-2 gap-2 text-sm">
                 <dt className="text-neutral-400">인터뷰이</dt>
                 <dd>{intervieweeName}</dd>
-                <dt className="text-neutral-400">작업 범위</dt>
-                <dd>{scope || "전체"}</dd>
                 <dt className="text-neutral-400">녹취록</dt>
                 <dd>{transcript?.fileName}</dd>
                 <dt className="text-neutral-400">질문지</dt>

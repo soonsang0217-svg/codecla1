@@ -10,17 +10,14 @@ body {
   color: var(--foreground);
 }
 
-.rdp-has-event {
-  position: relative;
-}
-.rdp-has-event::after {
-  content: "";
-  position: absolute;
-  bottom: 4px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 4px;
-  height: 4px;
-  border-radius: 9999px;
-  background: #dc2626;
+/*
+ * Taller day cells so a schedule label can sit under the date number.
+ * !important because react-day-picker's own stylesheet sets these on the
+ * same .rdp-day selector, and import order between it and this file isn't
+ * guaranteed by the bundler - the button's own size/shape is set via inline
+ * style in CalendarPanel instead, which doesn't have this problem.
+ */
+.rdp-with-labels .rdp-day {
+  width: 56px !important;
+  height: 52px !important;
 }
