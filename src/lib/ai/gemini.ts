@@ -4,9 +4,12 @@ import { SYSTEM_PROMPT, buildUserPromptText } from "./prompt";
 import { generateOutputSchema, type GenerateOutput } from "./schema";
 import type { AIProvider, GenerateArticleInput } from "./types";
 
-// Paid Gemini Flash model — override by changing this constant if a newer
-// Flash generation becomes the better cost/quality tradeoff.
-const GEMINI_MODEL = "gemini-3.7-flash";
+// Paid Gemini Flash model. gemini-2.5-flash (not the newer 3.x line) on
+// purpose: freshly-launched Gemini models routinely hit 503 "high demand"
+// for weeks after release while Google scales up capacity, regardless of
+// paid billing — 2.5-flash has been GA long enough to have that headroom.
+// Bump this once a newer generation has had time to mature.
+const GEMINI_MODEL = "gemini-2.5-flash";
 
 // Gemini occasionally returns 503 ("model currently experiencing high
 // demand") or 429 under normal load — both are transient, so a short retry
