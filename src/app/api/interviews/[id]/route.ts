@@ -4,6 +4,7 @@ import { z } from "zod";
 import { db } from "@/lib/db/client";
 import { interviews } from "@/lib/db/schema";
 import { articleContentSchema } from "@/lib/ai/schema";
+import { dbErrorResponse } from "@/lib/api-error";
 import type { ArticleContent, NeedsCheckItem, RevisionSummary } from "@/lib/article";
 
 function serialize(row: typeof interviews.$inferSelect) {
@@ -21,9 +22,13 @@ function serialize(row: typeof interviews.$inferSelect) {
 
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [row] = await db.select().from(interviews).where(eq(interviews.id, id));
-  if (!row) return NextResponse.json({ error: "찾을 수 없습니다" }, { status: 404 });
-  return NextResponse.json({ interview: serialize(row) });
+  try {
+    const [row] = await db.select().from(interviews).where(eq(interviews.id, id));
+    if (!row) return NextResponse.json({ error: "찾을 수 없습니다" }, { status: 404 });
+    return NextResponse.json({ interview: serialize(row) });
+  } catch (err) {
+    return dbErrorResponse(err);
+  }
 }
 
 const updateSchema = z.object({
@@ -47,15 +52,23 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   if (parsed.data.needsCheck) update.needsCheckJson = JSON.stringify(parsed.data.needsCheck);
   if (parsed.data.status) update.status = parsed.data.status;
 
-  await db.update(interviews).set(update).where(eq(interviews.id, id));
+  try {
+    await db.update(interviews).set(update).where(eq(interviews.id, id));
 
-  const [row] = await db.select().from(interviews).where(eq(interviews.id, id));
-  if (!row) return NextResponse.json({ error: "찾을 수 없습니다" }, { status: 404 });
-  return NextResponse.json({ interview: serialize(row) });
+    const [row] = await db.select().from(interviews).where(eq(interviews.id, id));
+    if (!row) return NextResponse.json({ error: "찾을 수 없습니다" }, { status: 404 });
+    return NextResponse.json({ interview: serialize(row) });
+  } catch (err) {
+    return dbErrorResponse(err);
+  }
 }
 
 export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  await db.delete(interviews).where(eq(interviews.id, id));
-  return NextResponse.json({ ok: true });
+  try {
+    await db.delete(interviews).where(eq(interviews.id, id));
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    return dbErrorResponse(err);
+  }
 }

@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { db } from "@/lib/db/client";
 import { calendarEvents } from "@/lib/db/schema";
+import { dbErrorResponse } from "@/lib/api-error";
 
 const createSchema = z.object({
   intervieweeName: z.string().min(1),
@@ -11,8 +12,12 @@ const createSchema = z.object({
 });
 
 export async function GET() {
-  const rows = await db.select().from(calendarEvents).orderBy(calendarEvents.publishDate);
-  return NextResponse.json({ events: rows });
+  try {
+    const rows = await db.select().from(calendarEvents).orderBy(calendarEvents.publishDate);
+    return NextResponse.json({ events: rows });
+  } catch (err) {
+    return dbErrorResponse(err);
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -31,6 +36,10 @@ export async function POST(request: NextRequest) {
     createdAt: now,
     updatedAt: now,
   };
-  await db.insert(calendarEvents).values(row);
-  return NextResponse.json({ event: row }, { status: 201 });
+  try {
+    await db.insert(calendarEvents).values(row);
+    return NextResponse.json({ event: row }, { status: 201 });
+  } catch (err) {
+    return dbErrorResponse(err);
+  }
 }

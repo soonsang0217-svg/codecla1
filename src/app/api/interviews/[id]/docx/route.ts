@@ -3,11 +3,18 @@ import { eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { interviews } from "@/lib/db/schema";
 import { buildArticleDocx, docxFileName } from "@/lib/docx-export";
+import { dbErrorResponse } from "@/lib/api-error";
 import type { ArticleContent } from "@/lib/article";
 
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [row] = await db.select().from(interviews).where(eq(interviews.id, id));
+
+  let row: typeof interviews.$inferSelect | undefined;
+  try {
+    [row] = await db.select().from(interviews).where(eq(interviews.id, id));
+  } catch (err) {
+    return dbErrorResponse(err);
+  }
   if (!row) return NextResponse.json({ error: "찾을 수 없습니다" }, { status: 404 });
 
   const article = JSON.parse(row.articleJson) as ArticleContent;

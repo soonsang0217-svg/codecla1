@@ -4,6 +4,7 @@ import { z } from "zod";
 import { db } from "@/lib/db/client";
 import { interviews } from "@/lib/db/schema";
 import { getAIProvider } from "@/lib/ai/provider";
+import { dbErrorResponse } from "@/lib/api-error";
 
 const requestSchema = z.object({
   transcript: z.string().min(1),
@@ -42,7 +43,11 @@ export async function POST(request: NextRequest) {
     createdAt: now,
     updatedAt: now,
   };
-  await db.insert(interviews).values(row);
+  try {
+    await db.insert(interviews).values(row);
+  } catch (err) {
+    return dbErrorResponse(err);
+  }
 
   return NextResponse.json({
     id: row.id,

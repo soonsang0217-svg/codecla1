@@ -15,15 +15,26 @@ interface InterviewSummary {
 export default function InterviewList() {
   const [interviews, setInterviews] = useState<InterviewSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/interviews")
-      .then((r) => r.json())
-      .then((data) => setInterviews(data.interviews ?? []))
-      .finally(() => setLoading(false));
+    (async () => {
+      try {
+        const res = await fetch("/api/interviews");
+        const raw = await res.text();
+        const data = raw ? JSON.parse(raw) : {};
+        if (!res.ok) throw new Error(data.error ?? `목록을 불러오지 못했습니다 (status ${res.status})`);
+        setInterviews(data.interviews ?? []);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "목록을 불러오지 못했습니다");
+      } finally {
+        setLoading(false);
+      }
+    })();
   }, []);
 
   if (loading) return <p className="text-sm text-neutral-400">불러오는 중...</p>;
+  if (error) return <p className="text-sm text-red-600">{error}</p>;
   if (interviews.length === 0) return <p className="text-sm text-neutral-400">아직 작업한 인터뷰가 없습니다</p>;
 
   return (

@@ -26,11 +26,19 @@ export default function CalendarPanel() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/calendar-events")
-      .then((r) => r.json())
-      .then((data) => setEvents(data.events ?? []))
-      .catch(() => setError("일정을 불러오지 못했습니다"))
-      .finally(() => setLoading(false));
+    (async () => {
+      try {
+        const res = await fetch("/api/calendar-events");
+        const raw = await res.text();
+        const data = raw ? JSON.parse(raw) : {};
+        if (!res.ok) throw new Error(data.error ?? `일정을 불러오지 못했습니다 (status ${res.status})`);
+        setEvents(data.events ?? []);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "일정을 불러오지 못했습니다");
+      } finally {
+        setLoading(false);
+      }
+    })();
   }, []);
 
   const eventDates = useMemo(() => events.map((e) => new Date(e.publishDate + "T00:00:00")), [events]);
@@ -94,6 +102,8 @@ export default function CalendarPanel() {
           <h3 className="text-sm font-medium text-neutral-700">{format(selected, "yyyy년 M월 d일")} 일정</h3>
           {loading ? (
             <p className="mt-2 text-sm text-neutral-400">불러오는 중...</p>
+          ) : error && events.length === 0 ? (
+            <p className="mt-2 text-sm text-red-600">{error}</p>
           ) : eventsOnSelected.length === 0 ? (
             <p className="mt-2 text-sm text-neutral-400">등록된 일정이 없습니다</p>
           ) : (
