@@ -45,6 +45,8 @@ export function aiErrorResponse(err: unknown) {
     hint = `${keyName}가 올바르지 않습니다. 발급받은 키를 다시 확인해 Vercel 환경변수에 정확히 입력했는지 확인해주세요.`;
   } else if (/RESOURCE_EXHAUSTED|rate_limit|429/i.test(message)) {
     hint = "AI 요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요.";
+  } else if (/UNAVAILABLE|"code":\s*503|high demand|overloaded/i.test(message)) {
+    hint = "AI 서버가 일시적으로 혼잡합니다. 잠시 후(1~2분 뒤) 다시 시도해주세요.";
   } else if (/PERMISSION_DENIED|billing/i.test(message)) {
     hint = `${keyName}에 결제(billing)가 연결되어 있는지 확인해주세요.`;
   }

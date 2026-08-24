@@ -1,4 +1,4 @@
-import { GoogleGenAI, createPartFromBase64, createPartFromText, type PartUnion } from "@google/genai";
+import { GoogleGenAI, ApiError, createPartFromBase64, createPartFromText, type PartUnion } from "@google/genai";
 import { z } from "zod";
 import { SYSTEM_PROMPT, buildUserPromptText } from "./prompt";
 import { generateOutputSchema, type GenerateOutput } from "./schema";
@@ -7,6 +7,17 @@ import type { AIProvider, GenerateArticleInput } from "./types";
 // Paid Gemini Flash model — override by changing this constant if a newer
 // Flash generation becomes the better cost/quality tradeoff.
 const GEMINI_MODEL = "gemini-3.7-flash";
+
+// Gemini occasionally returns 503 ("model currently experiencing high
+// demand") or 429 under normal load — both are transient, so a short retry
+// clears most of them instead of surfacing an error for what's often a
+// one-off blip.
+const RETRYABLE_STATUS = new Set([429, 503]);
+const RETRY_DELAYS_MS = [1000, 2500];
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 /** Google's responseJsonSchema accepts standard JSON Schema but not the `$schema` key. */
 function responseJsonSchema() {
@@ -33,20 +44,31 @@ export class GeminiProvider implements AIProvider {
     }
     parts.push(createPartFromText(buildUserPromptText(input)));
 
-    const response = await this.client.models.generateContent({
-      model: GEMINI_MODEL,
-      contents: parts,
-      config: {
-        systemInstruction: SYSTEM_PROMPT,
-        responseMimeType: "application/json",
-        responseJsonSchema: responseJsonSchema(),
-      },
-    });
+    let lastError: unknown;
+    for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
+      try {
+        const response = await this.client.models.generateContent({
+          model: GEMINI_MODEL,
+          contents: parts,
+          config: {
+            systemInstruction: SYSTEM_PROMPT,
+            responseMimeType: "application/json",
+            responseJsonSchema: responseJsonSchema(),
+          },
+        });
 
-    const text = response.text;
-    if (!text) {
-      throw new Error("Gemini 응답을 받지 못했습니다");
+        const text = response.text;
+        if (!text) {
+          throw new Error("Gemini 응답을 받지 못했습니다");
+        }
+        return generateOutputSchema.parse(JSON.parse(text));
+      } catch (err) {
+        lastError = err;
+        const retryable = err instanceof ApiError && RETRYABLE_STATUS.has(err.status);
+        if (!retryable || attempt === RETRY_DELAYS_MS.length) throw err;
+        await sleep(RETRY_DELAYS_MS[attempt]);
+      }
     }
-    return generateOutputSchema.parse(JSON.parse(text));
+    throw lastError;
   }
 }
