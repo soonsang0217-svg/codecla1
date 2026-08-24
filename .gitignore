@@ -37,6 +37,10 @@ yarn-error.log*
 # vercel
 .vercel
 
+# local sqlite db (drizzle-kit / libsql "file:" mode, used for local dev only)
+*.db
+*.db-journal
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

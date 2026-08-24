@@ -6,22 +6,32 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
-    "@upstash/redis": "^1.38.2",
+    "@anthropic-ai/sdk": "^0.120.0",
+    "@google/generative-ai": "^0.24.1",
+    "@libsql/client": "^0.17.4",
     "date-fns": "^4.4.0",
-    "fast-xml-parser": "^5.10.1",
-    "googleapis": "^174.0.0",
+    "docx": "^9.7.1",
+    "drizzle-orm": "^0.45.2",
+    "mammoth": "^1.12.1",
     "next": "16.3.0",
+    "pdf-parse": "^2.4.5",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-day-picker": "^10.0.1",
+    "react-dom": "19.2.8",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^22.20.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "drizzle-kit": "^0.31.10",
     "eslint": "^9",
     "eslint-config-next": "16.3.0",
     "tailwindcss": "^4",

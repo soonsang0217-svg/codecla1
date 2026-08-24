@@ -1,6 +1,26 @@
 @import "tailwindcss";
 
-@theme inline {
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+:root {
+  --background: #f7f7f5;
+  --foreground: #1f1f1f;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.rdp-has-event {
+  position: relative;
+}
+.rdp-has-event::after {
+  content: "";
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 4px;
+  height: 4px;
+  border-radius: 9999px;
+  background: #dc2626;
 }

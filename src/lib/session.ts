@@ -1,10 +1,9 @@
 import crypto from "node:crypto";
 
-export const SESSION_COOKIE = "briefing_session";
+export const SESSION_COOKIE = "interview_session";
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 days
 
 interface SessionPayload {
-  email: string;
   exp: number;
 }
 
@@ -20,35 +19,41 @@ function sign(data: string): string {
   return crypto.createHmac("sha256", getSecret()).update(data).digest("base64url");
 }
 
-export function createSessionCookie(email: string): string {
-  const payload: SessionPayload = {
-    email,
-    exp: Date.now() + SESSION_TTL_SECONDS * 1000,
-  };
+export function createSessionCookie(): string {
+  const payload: SessionPayload = { exp: Date.now() + SESSION_TTL_SECONDS * 1000 };
   const data = Buffer.from(JSON.stringify(payload)).toString("base64url");
-  const signature = sign(data);
-  return `${data}.${signature}`;
+  return `${data}.${sign(data)}`;
 }
 
-export function verifySessionCookie(cookieValue: string | undefined | null): { email: string } | null {
-  if (!cookieValue) return null;
+export function verifySessionCookie(cookieValue: string | undefined | null): boolean {
+  if (!cookieValue) return false;
   const [data, signature] = cookieValue.split(".");
-  if (!data || !signature) return null;
+  if (!data || !signature) return false;
 
   const expectedSignature = sign(data);
   const sigBuf = Buffer.from(signature);
   const expectedBuf = Buffer.from(expectedSignature);
   if (sigBuf.length !== expectedBuf.length || !crypto.timingSafeEqual(sigBuf, expectedBuf)) {
-    return null;
+    return false;
   }
 
   try {
     const payload = JSON.parse(Buffer.from(data, "base64url").toString("utf8")) as SessionPayload;
-    if (payload.exp < Date.now()) return null;
-    return { email: payload.email };
+    return payload.exp >= Date.now();
   } catch {
-    return null;
+    return false;
   }
+}
+
+export function verifyTeamPassword(candidate: string): boolean {
+  const expected = process.env.TEAM_PASSWORD;
+  if (!expected) {
+    throw new Error("TEAM_PASSWORD environment variable is not set");
+  }
+  const candidateBuf = Buffer.from(candidate);
+  const expectedBuf = Buffer.from(expected);
+  if (candidateBuf.length !== expectedBuf.length) return false;
+  return crypto.timingSafeEqual(candidateBuf, expectedBuf);
 }
 
 export const SESSION_MAX_AGE = SESSION_TTL_SECONDS;

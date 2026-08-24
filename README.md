@@ -1,192 +1,117 @@
-# 아침 브리핑 (Morning Briefing)
+# 인터뷰 기사 초안 생성기
 
-매일 아침 Google 캘린더 일정, Google Tasks 할 일, 관심 종목 시세, 주요 뉴스, 그리고 일정에
-장소가 있을 경우 집에서부터의 예상 이동 시간/경로까지 한 화면에서 확인하고, 그 자리에서 바로
-수정할 수 있는 개인용 웹 앱입니다. **터미널이나 별도 PC 서버 없이, 아이패드(또는 아무 브라우저)
-만으로 배포와 매일 사용이 모두 가능하도록** Vercel + Upstash 조합을 기본 배포 방식으로 설계했습니다.
+인터뷰 녹취록과 질문지를 업로드하면 AI가 [대신 만나드립니다] 스타일의 인터뷰 기사 초안을 만들어주고,
+에디터에서 직접 다듬은 뒤 워드 파일로 내려받거나 브런치에 붙여넣을 수 있는 팀 내부 도구입니다.
+50명 내외의 소규모 팀이 함께 쓰는 것을 전제로 하며 Vercel에 배포합니다.
 
-## 주요 기능
+## 전체 흐름 (5단계)
 
-- **오늘 일정** — Google 캘린더 조회, 생성, 수정, 삭제
-- **월별 캘린더** (`/calendar`) — 달력에서 날짜 클릭해 그날 일정 확인·추가·수정
-- **할 일** — Google Tasks 조회, 체크, 생성, 수정, 삭제. "완료된 할 일 보기"로 완료 목록도
-  펼쳐볼 수 있고, 체크 해제 한 번으로 실수로 완료 처리한 항목을 되돌릴 수 있음
-- **주식 현황** — 설정에서 등록한 관심 종목의 실시간에 가까운 시세와 종목명 (해외: Finnhub,
-  국내: Naver 금융), 장중/장마감 여부와 다음 개장·마감 시각(KST 기준)까지 함께 표시
-- **오늘 날씨** — 날씨 아이콘, 최고/최저기온, 강수확률, 미세먼지(PM2.5), 비/눈이 예상되면 시작
-  시각까지 표시 (Open-Meteo, 키 불필요). 기상청 공식 기상특보(호우/강풍/한파 등 주의보·경보)가
-  현재 위치에 발효 중이면 날씨 카드 상단에 빨간 배너로 표시 (기상청 특보 API, 무료 키 필요)
-- **주요 뉴스** — 국가/키워드 기준 헤드라인 (Google 뉴스 RSS, 키 불필요)
-- **이동 경로/시간** — 일정에 장소가 있으면 예상 자동차 이동 시간·거리·출발 시각(Kakao)과
-  지도 링크를 함께 표시. 일정 등록 시 장소는 Kakao 검색 자동완성으로 입력해 오탈자로 인한
-  경로 계산 실패를 방지
-- **현재 위치 기준 날씨/경로** — 페이지를 열 때마다 브라우저 위치 권한을 요청해 실제 현재
-  위치를 기준으로 날씨와 이동 경로를 계산. 권한을 거부하거나 사용할 수 없으면 설정에 등록한
-  집 주소로 자동 전환. "오늘 날씨" 옆 배지에 현재 기준이 되는 주소를 함께 표시 (Kakao 역지오코딩)
-- **매일 아침 이메일 브리핑** — 매일 07:00(KST)에 그날의 일정/할 일/날씨/주식/주요 뉴스를
-  정리한 메일을 자동 발송 (Vercel Cron + Resend, 브라우저를 열지 않아도 도착). 대시보드의
-  **메일로 보내기** 버튼으로 정해진 시간 외에도 즉시 같은 메일을 보낼 수 있음
-- Google 계정으로 로그인(허용된 이메일만), 세션 쿠키로 이후 접근 보호. 최초 1회만 전체 권한
-  동의 화면이 뜨고, 이후 재로그인 시에는(리프레시 토큰을 이미 보관 중이므로) 권한 동의 화면
-  없이 바로 로그인됨
-- 아이패드 홈 화면에 추가하면 앱처럼 아이콘으로 실행 가능 (PWA manifest)
+1. **대시보드** — 발행 일정 캘린더, 작업했던 인터뷰 목록, 사용법 안내
+2. **업로드** — 녹취록(.txt/.docx), 질문지(.txt/.docx/.pdf), 작업 범위, 인터뷰이 이름 입력
+3. **AI 생성** — 이 단계에서만 AI API를 호출(토큰 비용 발생 지점). 생성 완료 시점부터 DB에 초안으로 저장
+4. **검토·수정** — 에디터로 직접 수정, 사이드바에 분량/예상 읽기 시간 표시, 자동저장
+5. **완료** — 워드 파일(.docx) 다운로드, 브런치 붙여넣기용 서식 복사, 브런치 글쓰기 페이지 링크
 
-## 아키텍처
+모든 페이지는 상단 스테퍼 UI로 현재 단계를 보여주며, 앱의 모든 라우트는 `src/proxy.ts`에서
+팀 공통 비밀번호 세션 쿠키를 확인합니다(URL 직접 접근 포함).
 
-- **Next.js 16 (App Router, TypeScript)** — 단일 서비스로 프론트엔드 + API 라우트 제공
-- **googleapis** — Google Calendar API v3, Google Tasks API v1 연동 (OAuth2, refresh token 자동 갱신)
-- **Upstash Redis** (REST 기반, 서버리스 친화적) — Google 토큰, 사용자 설정, 외부 API 응답
-  캐시를 저장. 로컬 파일에 의존하지 않으므로 Vercel 같은 서버리스 플랫폼에서도 재배포/재시작과
-  무관하게 데이터가 유지됩니다.
-- **Finnhub / Naver 금융 / Google 뉴스 RSS / Kakao Local·Mobility API / Open-Meteo** — 외부 데이터 소스
-- 서명된 쿠키 기반 세션(자체 구현) — 별도 인증 서버 없이 허용된 Google 계정 1명(또는 소수)만
-  접근하도록 게이팅
+## 기술 스택
 
-## 배포: Vercel + Upstash (터미널 없이, 아이패드만으로 가능)
+- **Next.js 16 (App Router, TypeScript)** — `middleware`가 `proxy`로 이름이 바뀐 최신 버전입니다.
+  코드를 수정하기 전에 `node_modules/next/dist/docs/`의 문서를 참고하세요 (`AGENTS.md` 참고).
+- **Tailwind CSS 4**
+- **Turso (libSQL) + Drizzle ORM** — 캘린더 일정, 인터뷰 기사(구조화 JSON) 저장
+- **docx** — 워드 파일 생성
+- **mammoth / pdf-parse** — 서버사이드 .docx/.pdf 텍스트 추출
+- **@anthropic-ai/sdk / @google/generative-ai** — AI Provider 추상화 (`src/lib/ai/`)
+- **react-day-picker** — 캘린더 UI
 
-전체 과정이 브라우저 안에서 클릭 몇 번으로 끝납니다. PC/홈서버가 필요 없습니다.
+## 왜 Turso인가 (DB 선택 트레이드오프)
 
-### 1) Upstash Redis 만들기
-
-1. [upstash.com](https://upstash.com) 접속 → 가입(GitHub 계정으로 바로 가능) → **Create Database**
-2. 리전은 배포할 Vercel 리전과 가까운 곳으로 선택 (예: 서울에서 쓸 거면 도쿄/싱가포르 등)
-3. 생성된 데이터베이스의 **REST API** 탭에서 `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`
-   값을 복사해둡니다 (다음 단계에서 Vercel에 붙여넣습니다)
-
-### 2) 나머지 API 키 발급
-
-| 항목 | 어디서 | 필요한 것 |
+| | Turso (libSQL) + Drizzle | Vercel Postgres(Neon) + Drizzle |
 |---|---|---|
-| Google OAuth (필수) | [Google Cloud Console](https://console.cloud.google.com/) | Calendar API + Tasks API 활성화 → OAuth 클라이언트(웹 앱) 생성 |
-| 주식 시세 | [finnhub.io](https://finnhub.io) 무료 가입 | API 키 |
-| 뉴스 | 없음 (Google 뉴스 RSS, 키/가입 불필요) | - |
-| 이동 경로 | [Kakao Developers](https://developers.kakao.com) | 앱 생성 → Local + 길찾기(Directions) 제품 활성화 → REST API 키 |
-| 날씨 | 없음 (Open-Meteo, 키/가입 불필요) | 집 주소(`HOME_ADDRESS`)와 `KAKAO_REST_API_KEY`가 있어야 좌표 변환 후 조회됩니다 |
-| 기상특보 | [data.go.kr](https://www.data.go.kr) 무료 가입 | "기상특보" 검색 → 기상청 **기상특보 조회서비스** 활용신청(보통 즉시 승인) → 일반 인증키(Decoding) |
-| 이메일 브리핑 | [resend.com](https://resend.com) 무료 가입 | 받을 이메일 주소(예: `soonsang0217@naver.com`)로 가입 → API 키 |
+| 구현 난이도 | 매우 낮음. SQLite 문법 그대로, 로컬 개발 시 `file:local.db`로 별도 서버 없이 개발 가능 | 낮음. 표준 Postgres, JSONB 등 더 풍부한 타입 |
+| 무료 티어 | 500 DB, 총 5GB, 월 5억 row read 등 — 이 앱(팀 50명, 저사용량) 규모에서는 사실상 무제한급 | 프로젝트 1개, 스토리지/컴퓨트 제한적, 일정 시간 미사용 시 컴퓨트 슬립(첫 요청 지연) |
+| Vercel 궁합 | Vercel 공식 통합은 아니지만 REST 기반 `@libsql/client`로 서버리스 환경에서 별 문제 없이 동작 | Vercel Storage 탭에서 원클릭 연결, 가장 "네이티브"함 |
+| 결론 | **이 프로젝트 규모(소규모 팀, 캘린더+인터뷰 기사만 저장)에는 설정이 더 간단하고 무료 한도가 넉넉한 Turso를 추천** | 더 복잡한 관계형 쿼리나 JSONB 인덱싱이 필요해지면 이쪽으로 이전 고려 |
 
-Google OAuth 클라이언트의 **승인된 리디렉션 URI**는 3단계에서 Vercel이 발급해주는 주소를
-알아야 정확히 채울 수 있으므로, Google 클라이언트 생성은 4단계 이후에 마무리해도 됩니다
-(먼저 임시로 `https://example.com/api/auth/google/callback`을 넣어두고 나중에 실제 주소로
-수정 → 저장하면 됩니다).
+두 옵션 모두 Drizzle ORM을 그대로 사용하므로, 필요하면 `src/lib/db/client.ts`와
+`drizzle.config.ts`의 `dialect`만 바꿔서 전환할 수 있습니다.
 
-### 3) Vercel에 배포
-
-1. [vercel.com](https://vercel.com) 가입(GitHub 계정으로) → **Add New... > Project**
-2. 이 저장소(`codecla1`)를 Import (Vercel이 Next.js 프로젝트임을 자동 인식, 빌드 설정 변경 불필요)
-3. **Environment Variables**에 `.env.example`의 항목을 모두 입력:
-   - `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` (1단계에서 복사한 값)
-   - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
-   - `GOOGLE_REDIRECT_URI` = `https://<프로젝트명>.vercel.app/api/auth/google/callback`
-     (정확한 도메인은 Deploy 후 확인 가능; 미리 원하는 프로젝트명을 정해서 입력해도 됨)
-   - `ALLOWED_EMAIL`, `SESSION_SECRET`(`openssl rand -base64 32` 또는 아무 긴 무작위 문자열)
-   - `FINNHUB_API_KEY`, `STOCK_SYMBOLS`, `NEWS_COUNTRY`, `NEWS_QUERY`
-   - `KAKAO_REST_API_KEY`, `HOME_ADDRESS`
-   - `KMA_WARNING_API_KEY` — 비워두면 기상특보 배너만 비활성화됩니다
-   - `RESEND_API_KEY`, `BRIEFING_EMAIL_TO`(=`soonsang0217@naver.com`), `CRON_SECRET`(`openssl
-     rand -base64 32`) — 매일 아침 이메일 브리핑용. 비워두면 이메일 발송 기능만 비활성화됩니다
-4. **Deploy** 클릭 → 몇 분 내 `https://<프로젝트명>.vercel.app` 주소 발급
-5. Google Cloud Console로 돌아가 OAuth 클라이언트의 **승인된 리디렉션 URI**를 실제 Vercel
-   주소(`https://<프로젝트명>.vercel.app/api/auth/google/callback`)로 정확히 맞춰줍니다
-
-이후 코드를 수정해서 `git push`하면 Vercel이 자동으로 재배포합니다. 아이패드에서 Safari로
-[vercel.com](https://vercel.com) 대시보드에 접속해 위 과정을 그대로 따라 할 수 있습니다.
-
-### 4) 아이패드에서 매일 확인하기
-
-1. Safari에서 `https://<프로젝트명>.vercel.app` 접속 → Google 로그인
-2. 공유 버튼 → **홈 화면에 추가** → 앱 아이콘처럼 홈 화면에서 바로 실행 가능
-3. `/settings`에서 집 주소, 관심 종목, 뉴스 옵션을 한 번 설정해두면 계속 유지됩니다
-4. 매일 아침 아이콘을 눌러 실행 → 새로고침 버튼으로 언제든 최신 데이터 갱신
-5. 처음 열 때 위치 권한 팝업이 뜨면 **허용**을 눌러야 날씨/이동 경로가 현재 위치 기준으로
-   표시됩니다 (거부해도 앱은 정상 동작하며, 집 주소 기준으로 자동 전환됩니다)
-
-> **알려진 제한사항**: Kakao의 공개 REST API는 자동차 길찾기만 제공하며, 대중교통(버스/지하철)
-> 경로 API는 별도 상용 계약이 필요합니다. 앱은 자동차 기준 예상 시간을 보여주고, 대중교통 경로는
-> "지도에서 보기" 링크로 카카오맵을 열어 직접 확인하도록 안내합니다.
->
-> 주식의 장중/장마감 판정은 정규장 시간(미국 09:30–16:00 ET, 한국 09:00–15:30 KST, 평일)만
-> 반영하며 공휴일 캘린더는 반영하지 않습니다 — 휴장일에는 실제로는 휴장인데도 "장중"으로
-> 표시될 수 있습니다.
->
-> 기상특보는 기상청이 배포하는 정식 특보구역코드 표(시/도 17개 + 시/군/구 약 280개)와,
-> "인천남부"·"부산동부"·"파주동북부"처럼 기상청이 방위 기준으로 더 잘게 나누는 약 50개
-> 대도시/시/군의 세분구역 표(어느 구/읍/면/동이 어느 세분구역에 속하는지)를 코드에 함께
-> 내장해두고, 현재 위치를 그 표에서 찾은 정확한 지역코드로 특보 발표/해제 이력을 조회해서
-> "지금 유효한지"를 직접 판단합니다(자유 텍스트 문구를 추측해서 대조하는 방식이 아닙니다).
-> 세분구역이 해발고도 기준(예: 제주도산지, 구례산간)이거나 리 단위 섬(예: 보령 외연도)인
-> 극히 일부 지역은 위/경도 기준 역지오코딩만으로는 정확히 구분할 수 없어 더 넓은 단위로
-> 조회됩니다.
-
-### 5) 매일 아침 이메일 브리핑 설정 (선택)
-
-1. [resend.com](https://resend.com)에서 **받을 이메일 주소로 직접 가입** (예: `soonsang0217@naver.com`).
-   무료 플랜은 도메인 인증 없이는 가입할 때 쓴 이메일 주소로만 발송할 수 있는데, 정확히 이
-   앱이 필요로 하는 용도와 맞습니다.
-2. 가입 후 **API Keys**에서 키 생성 → Vercel 프로젝트 환경변수에 `RESEND_API_KEY`로 저장
-3. `BRIEFING_EMAIL_TO`에 받을 주소(`soonsang0217@naver.com`) 입력
-4. `CRON_SECRET`에 임의의 긴 문자열 입력 (`openssl rand -base64 32`) — Vercel이 이 값을 설정된
-   프로젝트에 한해 자동으로 크론 요청에 `Authorization: Bearer <값>` 헤더로 실어 보내므로,
-   별도 설정 없이 그 자체로 "Vercel의 정식 크론 요청만 허용"하는 인증 역할을 합니다
-5. 저장소에 포함된 `vercel.json`(`0 22 * * *` = 매일 07:00 KST)이 배포 시 자동으로 Vercel Cron
-   Job을 등록합니다 — 추가로 할 일 없음. Vercel 대시보드의 프로젝트 **Settings > Cron Jobs**에서
-   등록 여부와 실행 로그를 확인할 수 있습니다
-6. 브리핑 화면 상단의 **메일로 보내기** 버튼을 누르면 정해진 07시가 아니어도 그 자리에서 즉시
-   같은 내용의 메일을 보낼 수 있습니다 (로그인한 사용자만 가능)
-
-> **참고**: Vercel 무료(Hobby) 플랜의 크론 작업은 예약된 시각 근처에서 실행되지만 정확히
-> 그 분(minute)에 실행된다고 보장되지는 않습니다(최대 1시간 이내 오차 가능). 정확한 시각이
-> 중요하다면 Vercel Pro 플랜에서 더 정밀한 스케줄링을 제공합니다.
-
-## 대안 배포: Docker로 직접 호스팅
-
-집 서버/PC나 Railway·Fly.io 같은 곳에 직접 띄우고 싶다면 Docker로도 실행할 수 있습니다.
-저장소는 여전히 Upstash Redis를 사용하므로(로컬 볼륨 불필요), `.env`만 채우면 됩니다.
-
-```bash
-cp .env.example .env   # 값 채워넣기 (GOOGLE_REDIRECT_URI는 실제 접속 주소로 지정)
-docker compose up -d --build
-```
-
-컨테이너는 3000번 포트로 서비스됩니다. 홈 네트워크 밖에서도 접속하려면 Tailscale 등 VPN으로
-서버를 홈 네트워크에 연결한 뒤 아이패드에서도 같은 VPN으로 접속하는 방식을 권장합니다
-(포트를 공인 인터넷에 직접 노출하는 것은 권장하지 않습니다).
-
-## 로컬 개발 실행
+## 로컬 실행
 
 ```bash
 npm install
-cp .env.example .env   # 값 채워넣기 (Upstash는 무료 DB 하나 만들어서 연결)
+cp .env.example .env
+```
+
+`.env`를 채웁니다:
+
+- `TEAM_PASSWORD`, `SESSION_SECRET`(`openssl rand -base64 32`)
+- `TURSO_DATABASE_URL` — 로컬 개발만 할 거라면 `file:local.db`로 두면 별도 가입 없이 바로 됩니다.
+  실제 팀에서 공유하려면 [turso.tech](https://turso.tech)에서 무료 DB를 만들고
+  `libsql://...` URL과 `TURSO_AUTH_TOKEN`을 채우세요.
+- `ANTHROPIC_API_KEY` (기본 provider). Gemini로 전환할 거면 `GEMINI_API_KEY`도.
+
+마이그레이션 적용 후 개발 서버 실행:
+
+```bash
+npm run db:generate   # 스키마 변경 시 마이그레이션 파일 생성 (이미 생성된 drizzle/ 폴더는 커밋되어 있음)
+npm run db:migrate    # DB에 마이그레이션 적용
 npm run dev
 ```
 
-## 환경변수 요약
+## Vercel 배포
 
-`.env.example` 참고. 필수: `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`,
-`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`, `SESSION_SECRET`.
-나머지(주식/뉴스/경로/이메일 API 키, 허용 이메일)는 비워두면 해당 기능만 비활성화된 채로
-앱은 정상 동작합니다.
+1. [turso.tech](https://turso.tech)에서 DB 생성 → `libsql://...` URL과 auth token 발급
+   (`turso db create interview-drafts`, `turso db tokens create interview-drafts`)
+2. 로컬에서 그 DB를 대상으로 마이그레이션 적용: `TURSO_DATABASE_URL=... TURSO_AUTH_TOKEN=... npm run db:migrate`
+3. Vercel에서 이 저장소를 Import (Next.js 프로젝트 자동 인식)
+4. Environment Variables에 `.env.example`의 모든 항목 입력
+   (`TEAM_PASSWORD`, `SESSION_SECRET`, `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`,
+   `AI_PROVIDER`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`)
+5. Deploy
+
+이후 `git push`하면 Vercel이 자동으로 재배포합니다.
+
+## AI_PROVIDER 전환 방법
+
+`src/lib/ai/provider.ts`가 `AI_PROVIDER` 환경변수(`anthropic` 기본값 | `gemini`)를 보고
+`src/lib/ai/anthropic.ts` 또는 `src/lib/ai/gemini.ts` 구현체를 선택합니다. 두 구현체 모두
+`src/lib/ai/schema.ts`에 정의된 동일한 구조화 JSON(zod 스키마)을 반환하도록 강제되어 있어,
+전환 시 나머지 코드는 전혀 바꿀 필요가 없습니다.
+
+Vercel 환경변수에서 `AI_PROVIDER=gemini`로 바꾸고 `GEMINI_API_KEY`를 채운 뒤 재배포하면 됩니다.
+
+## Rate limit
+
+`src/lib/rate-limit.ts` — `/api/generate`(AI 호출, 유일한 비용 발생 지점)에 한해 IP당 시간당 5회로
+제한합니다. 메모리 기반이라 서버리스 인스턴스가 여러 개면 인스턴스별로 카운트되지만, 팀 내부용
+저사용량 도구 규모에서는 충분합니다.
 
 ## 프로젝트 구조
 
 ```
 src/
   app/
-    login/           로그인 페이지
-    briefing/         메인 대시보드 (일정/할 일/시세/뉴스)
-    calendar/          월별 캘린더 뷰
-    settings/          집 주소·관심 종목·뉴스 설정
+    login/                 팀 비밀번호 입력 (1단계 이전, proxy가 게이팅)
+    page.tsx               1단계: 대시보드 (캘린더 + 작업 목록)
+    new/                    2·3단계: 업로드 + AI 생성 (한 페이지, 내부 스테퍼)
+    interview/[id]/         4·5단계: 검토·수정 + 완료 (탭으로 구분)
     api/
-      auth/            Google OAuth 로그인/콜백/로그아웃/상태
-      calendar/        캘린더 이벤트 CRUD
-      tasks/           할 일 CRUD
-      places/          장소 자동완성 (Kakao 검색 프록시)
-      briefing/        일간 브리핑 집계 API
-      settings/        사용자 설정 조회/저장
-      cron/
-        daily-briefing/  매일 07시(KST) Vercel Cron이 호출하는 이메일 발송 엔드포인트
-  lib/                 Google API, 외부 데이터 소스, 세션, Upstash, 타임존, 이메일 등 핵심 로직
-  components/          일정/할 일 작성-수정 모달, 카드 UI, 장소 자동완성
-  proxy.ts             인증 게이팅 (로그인 안 된 요청 차단)
-vercel.json             Vercel Cron 스케줄 정의 (매일 아침 이메일 브리핑)
+      auth/                 로그인/로그아웃
+      calendar-events/      캘린더 CRUD
+      interviews/           인터뷰 목록/상세/수정/docx 다운로드
+      extract/              업로드 파일 → 텍스트 추출
+      generate/             AI 생성 (유일한 비용 발생 지점) + DB 레코드 생성
+  components/                Stepper, CalendarPanel, InterviewList, InterviewEditor
+  lib/
+    ai/                      AI Provider 추상화 (provider.ts, anthropic.ts, gemini.ts, schema.ts, prompt.ts)
+    db/                      Drizzle 스키마 + 클라이언트
+    article.ts                구조화 기사 타입 + 분량/읽기시간 계산
+    docx-export.ts             워드 파일 생성 ([대신 만나드립니다] 스타일)
+    clipboard-html.ts          브런치 붙여넣기용 서식 HTML
+    extract-text.ts             .txt/.docx/.pdf 텍스트 추출
+    session.ts / rate-limit.ts  인증 세션 / 레이트리밋
+  proxy.ts                   전체 라우트 비밀번호 게이팅 + /api/generate 레이트리밋
 ```
