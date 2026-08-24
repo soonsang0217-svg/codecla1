@@ -23,7 +23,7 @@
 - **Turso (libSQL) + Drizzle ORM** — 캘린더 일정, 인터뷰 기사(구조화 JSON) 저장
 - **docx** — 워드 파일 생성
 - **mammoth / pdf-parse** — 서버사이드 .docx/.pdf 텍스트 추출
-- **@anthropic-ai/sdk / @google/generative-ai** — AI Provider 추상화 (`src/lib/ai/`)
+- **@google/genai / @anthropic-ai/sdk** — AI Provider 추상화 (`src/lib/ai/`). 기본값은 Gemini Flash(유료 API)
 - **react-day-picker** — 캘린더 UI
 
 ## 왜 Turso인가 (DB 선택 트레이드오프)
@@ -51,7 +51,7 @@ cp .env.example .env
 - `TURSO_DATABASE_URL` — 로컬 개발만 할 거라면 `file:local.db`로 두면 별도 가입 없이 바로 됩니다.
   실제 팀에서 공유하려면 [turso.tech](https://turso.tech)에서 무료 DB를 만들고
   `libsql://...` URL과 `TURSO_AUTH_TOKEN`을 채우세요.
-- `ANTHROPIC_API_KEY` (기본 provider). Gemini로 전환할 거면 `GEMINI_API_KEY`도.
+- `GEMINI_API_KEY` (기본 provider, [aistudio.google.com](https://aistudio.google.com/apikey)에서 발급). Anthropic으로 전환할 거면 `ANTHROPIC_API_KEY`도.
 
 마이그레이션 적용 후 개발 서버 실행:
 
@@ -76,12 +76,14 @@ npm run dev
 
 ## AI_PROVIDER 전환 방법
 
-`src/lib/ai/provider.ts`가 `AI_PROVIDER` 환경변수(`anthropic` 기본값 | `gemini`)를 보고
-`src/lib/ai/anthropic.ts` 또는 `src/lib/ai/gemini.ts` 구현체를 선택합니다. 두 구현체 모두
+`src/lib/ai/provider.ts`가 `AI_PROVIDER` 환경변수(`gemini` 기본값 | `anthropic`)를 보고
+`src/lib/ai/gemini.ts` 또는 `src/lib/ai/anthropic.ts` 구현체를 선택합니다. 두 구현체 모두
 `src/lib/ai/schema.ts`에 정의된 동일한 구조화 JSON(zod 스키마)을 반환하도록 강제되어 있어,
-전환 시 나머지 코드는 전혀 바꿀 필요가 없습니다.
+전환 시 나머지 코드는 전혀 바꿀 필요가 없습니다. 현재 기본 모델은 Gemini Flash(`gemini-3.7-flash`,
+유료 API, `src/lib/ai/gemini.ts`의 `GEMINI_MODEL` 상수에서 변경 가능)입니다.
 
-Vercel 환경변수에서 `AI_PROVIDER=gemini`로 바꾸고 `GEMINI_API_KEY`를 채운 뒤 재배포하면 됩니다.
+Anthropic으로 되돌리려면 Vercel 환경변수에서 `AI_PROVIDER=anthropic`으로 바꾸고
+`ANTHROPIC_API_KEY`를 채운 뒤 재배포하면 됩니다.
 
 ## Rate limit
 

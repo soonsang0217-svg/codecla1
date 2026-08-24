@@ -3,12 +3,12 @@ import type { AIProvider } from "./types";
 export type { AIProvider, GenerateArticleInput, GenerateOutput } from "./types";
 
 /**
- * Selects the AI provider implementation based on AI_PROVIDER (default: "anthropic").
+ * Selects the AI provider implementation based on AI_PROVIDER (default: "gemini").
  * Lazily imports the implementation so the unused provider's SDK/key requirement
  * never has to be satisfied.
  */
 export async function getAIProvider(): Promise<AIProvider> {
-  const providerName = (process.env.AI_PROVIDER || "anthropic").toLowerCase();
+  const providerName = (process.env.AI_PROVIDER || "gemini").toLowerCase();
 
   switch (providerName) {
     case "anthropic": {

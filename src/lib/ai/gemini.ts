@@ -1,90 +1,46 @@
-import { GoogleGenerativeAI, SchemaType, type Schema } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
+import { z } from "zod";
 import { SYSTEM_PROMPT, buildUserPrompt } from "./prompt";
 import { generateOutputSchema, type GenerateOutput } from "./schema";
 import type { AIProvider, GenerateArticleInput } from "./types";
 
-const qaItemSchema: Schema = {
-  type: SchemaType.OBJECT,
-  properties: {
-    question: { type: SchemaType.STRING },
-    answer: { type: SchemaType.STRING },
-    isExtra: { type: SchemaType.BOOLEAN },
-  },
-  required: ["question", "answer", "isExtra"],
-};
+// Paid Gemini Flash model — override by changing this constant if a newer
+// Flash generation becomes the better cost/quality tradeoff.
+const GEMINI_MODEL = "gemini-3.7-flash";
 
-const responseSchema: Schema = {
-  type: SchemaType.OBJECT,
-  properties: {
-    article: {
-      type: SchemaType.OBJECT,
-      properties: {
-        title: { type: SchemaType.STRING },
-        subtitle: { type: SchemaType.STRING },
-        intro: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
-        bio: { type: SchemaType.STRING },
-        sections: {
-          type: SchemaType.ARRAY,
-          items: {
-            type: SchemaType.OBJECT,
-            properties: {
-              heading: { type: SchemaType.STRING },
-              qa: { type: SchemaType.ARRAY, items: qaItemSchema },
-            },
-            required: ["heading", "qa"],
-          },
-        },
-        outro: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
-      },
-      required: ["title", "subtitle", "intro", "bio", "sections", "outro"],
-    },
-    revisionSummary: {
-      type: SchemaType.OBJECT,
-      properties: {
-        sttFixes: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
-        offRecordExcluded: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
-      },
-      required: ["sttFixes", "offRecordExcluded"],
-    },
-    needsCheck: {
-      type: SchemaType.ARRAY,
-      items: {
-        type: SchemaType.OBJECT,
-        properties: {
-          item: { type: SchemaType.STRING },
-          reason: { type: SchemaType.STRING },
-        },
-        required: ["item", "reason"],
-      },
-    },
-  },
-  required: ["article", "revisionSummary", "needsCheck"],
-};
+/** Google's responseJsonSchema accepts standard JSON Schema but not the `$schema` key. */
+function responseJsonSchema() {
+  const schema = z.toJSONSchema(generateOutputSchema) as Record<string, unknown>;
+  delete schema.$schema;
+  return schema;
+}
 
 export class GeminiProvider implements AIProvider {
-  private client: GoogleGenerativeAI;
+  private client: GoogleGenAI;
 
   constructor() {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       throw new Error("GEMINI_API_KEY environment variable is not set");
     }
-    this.client = new GoogleGenerativeAI(apiKey);
+    this.client = new GoogleGenAI({ apiKey });
   }
 
   async generateArticle(input: GenerateArticleInput): Promise<GenerateOutput> {
-    const model = this.client.getGenerativeModel({
-      model: "gemini-2.5-pro",
-      systemInstruction: SYSTEM_PROMPT,
-      generationConfig: {
+    const response = await this.client.models.generateContent({
+      model: GEMINI_MODEL,
+      contents: buildUserPrompt(input),
+      config: {
+        systemInstruction: SYSTEM_PROMPT,
         responseMimeType: "application/json",
-        responseSchema,
+        responseJsonSchema: responseJsonSchema(),
       },
     });
 
-    const result = await model.generateContent(buildUserPrompt(input));
-    const text = result.response.text();
-    const parsed = JSON.parse(text);
-    return generateOutputSchema.parse(parsed);
+    const text = response.text;
+    if (!text) {
+      throw new Error("Gemini 응답을 받지 못했습니다");
+    }
+    return generateOutputSchema.parse(JSON.parse(text));
   }
 }
