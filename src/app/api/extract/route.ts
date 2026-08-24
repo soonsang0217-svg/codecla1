@@ -26,6 +26,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: err.message }, { status: 400 });
     }
     console.error("Text extraction failed", err);
-    return NextResponse.json({ error: "파일에서 텍스트를 추출하지 못했습니다" }, { status: 500 });
+    const detail = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: "파일에서 텍스트를 추출하지 못했습니다", detail }, { status: 500 });
   }
 }

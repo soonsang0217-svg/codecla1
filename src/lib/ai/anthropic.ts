@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
-import { SYSTEM_PROMPT, buildUserPrompt } from "./prompt";
+import { SYSTEM_PROMPT, buildUserPromptText } from "./prompt";
 import { generateOutputSchema, type GenerateOutput } from "./schema";
 import type { AIProvider, GenerateArticleInput } from "./types";
 
@@ -16,11 +16,20 @@ export class AnthropicProvider implements AIProvider {
   }
 
   async generateArticle(input: GenerateArticleInput): Promise<GenerateOutput> {
+    const content: Anthropic.ContentBlockParam[] = [];
+    if (input.questionnaire.type === "pdf") {
+      content.push({
+        type: "document",
+        source: { type: "base64", media_type: "application/pdf", data: input.questionnaire.base64 },
+      });
+    }
+    content.push({ type: "text", text: buildUserPromptText(input) });
+
     const response = await this.client.messages.parse({
       model: "claude-opus-5",
       max_tokens: 16000,
       system: SYSTEM_PROMPT,
-      messages: [{ role: "user", content: buildUserPrompt(input) }],
+      messages: [{ role: "user", content }],
       output_config: {
         format: zodOutputFormat(generateOutputSchema),
       },

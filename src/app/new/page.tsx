@@ -9,11 +9,11 @@ const TRANSCRIPT_HINT = "업로드 가능 형식: .txt, .docx";
 const QUESTIONNAIRE_HINT = "업로드 가능 형식: .txt, .docx, .pdf";
 // 이 도구는 항상 업로드된 녹취록 전체를 대상으로 기사를 작성합니다.
 const SCOPE = "전체";
+const MAX_PDF_BYTES = 15 * 1024 * 1024; // 15MB — well under typical serverless request-body limits
 
-interface FileSlot {
-  fileName: string;
-  text: string;
-}
+type FileSlot =
+  | { kind: "text"; fileName: string; text: string }
+  | { kind: "pdf"; fileName: string; base64: string; byteSize: number };
 
 async function uploadAndExtract(file: File, kind: "transcript" | "questionnaire"): Promise<FileSlot> {
   const formData = new FormData();
@@ -21,14 +21,46 @@ async function uploadAndExtract(file: File, kind: "transcript" | "questionnaire"
   formData.append("kind", kind);
   const res = await fetch("/api/extract", { method: "POST", body: formData });
   const raw = await res.text();
-  let data: { fileName?: string; text?: string; error?: string };
+  let data: { fileName?: string; text?: string; error?: string; detail?: string };
   try {
     data = raw ? JSON.parse(raw) : {};
   } catch {
     throw new Error(`서버 오류로 파일을 처리하지 못했습니다 (status ${res.status})`);
   }
-  if (!res.ok) throw new Error(data.error ?? `파일을 처리하지 못했습니다 (status ${res.status})`);
-  return { fileName: data.fileName ?? file.name, text: data.text ?? "" };
+  if (!res.ok) {
+    const base = data.error ?? `파일을 처리하지 못했습니다 (status ${res.status})`;
+    throw new Error(data.detail ? `${base} — ${data.detail}` : base);
+  }
+  return { kind: "text", fileName: data.fileName ?? file.name, text: data.text ?? "" };
+}
+
+/**
+ * PDF questionnaires are never sent to our server for text extraction —
+ * Claude/Gemini can both read a PDF directly, so we just read it as base64
+ * in the browser and hand it to the AI as a document attachment later.
+ * This also sidesteps running our own PDF parser, which has broken in ways
+ * that only ever showed up in production.
+ */
+function readPdfAsBase64(file: File): Promise<FileSlot> {
+  if (file.size > MAX_PDF_BYTES) {
+    return Promise.reject(new Error(`PDF 파일이 너무 큽니다 (최대 ${Math.floor(MAX_PDF_BYTES / 1024 / 1024)}MB)`));
+  }
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      const base64 = dataUrl.slice(dataUrl.indexOf(",") + 1);
+      resolve({ kind: "pdf", fileName: file.name, base64, byteSize: file.size });
+    };
+    reader.onerror = () => reject(new Error("PDF 파일을 읽지 못했습니다"));
+    reader.readAsDataURL(file);
+  });
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes}B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)}KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)}MB`;
 }
 
 function FileDropInput({
@@ -96,7 +128,9 @@ function FileDropInput({
           <div className="flex items-center justify-between gap-2 text-left">
             <div className="min-w-0">
               <p className="truncate text-sm font-medium text-green-800">{slot.fileName}</p>
-              <p className="text-xs text-green-600">{slot.text.length.toLocaleString()}자 추출됨</p>
+              <p className="text-xs text-green-600">
+                {slot.kind === "text" ? `${slot.text.length.toLocaleString()}자 추출됨` : `PDF 첨부됨 (AI가 직접 읽습니다) · ${formatBytes(slot.byteSize)}`}
+              </p>
             </div>
             <button
               type="button"
@@ -152,7 +186,7 @@ export default function NewInterviewPage() {
   const [generateError, setGenerateError] = useState<string | null>(null);
   const [result, setResult] = useState<(GenerateOutput & { id: string }) | null>(null);
 
-  const canProceed = !!transcript && intervieweeName.trim().length > 0;
+  const canProceed = !!transcript && !!questionnaire && intervieweeName.trim().length > 0;
 
   async function handleTranscriptFile(file: File) {
     setTranscriptError(null);
@@ -171,7 +205,8 @@ export default function NewInterviewPage() {
     setQuestionnaireError(null);
     setQuestionnaireUploading(true);
     try {
-      setQuestionnaire(await uploadAndExtract(file, "questionnaire"));
+      const isPdf = file.name.toLowerCase().endsWith(".pdf");
+      setQuestionnaire(isPdf ? await readPdfAsBase64(file) : await uploadAndExtract(file, "questionnaire"));
     } catch (err) {
       setQuestionnaire(null);
       setQuestionnaireError(err instanceof Error ? err.message : "업로드 실패");
@@ -181,7 +216,8 @@ export default function NewInterviewPage() {
   }
 
   async function handleGenerate() {
-    if (!transcript) return;
+    // Transcript never allows PDF, so it's always the "text" slot — this check is just for TypeScript.
+    if (!transcript || transcript.kind !== "text" || !questionnaire) return;
     setGenerating(true);
     setGenerateError(null);
     try {
@@ -190,7 +226,8 @@ export default function NewInterviewPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           transcript: transcript.text,
-          questionnaire: questionnaire?.text ?? "",
+          questionnaire:
+            questionnaire.kind === "text" ? { type: "text", value: questionnaire.text } : { type: "pdf", base64: questionnaire.base64 },
           scope: SCOPE,
           intervieweeName,
         }),
@@ -229,7 +266,7 @@ export default function NewInterviewPage() {
             onRemove={() => setTranscript(null)}
           />
           <FileDropInput
-            label="질문지 (선택)"
+            label="질문지"
             hint={QUESTIONNAIRE_HINT}
             accept=".txt,.docx,.pdf"
             slot={questionnaire}

@@ -1,6 +1,6 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, createPartFromBase64, createPartFromText, type PartUnion } from "@google/genai";
 import { z } from "zod";
-import { SYSTEM_PROMPT, buildUserPrompt } from "./prompt";
+import { SYSTEM_PROMPT, buildUserPromptText } from "./prompt";
 import { generateOutputSchema, type GenerateOutput } from "./schema";
 import type { AIProvider, GenerateArticleInput } from "./types";
 
@@ -27,9 +27,15 @@ export class GeminiProvider implements AIProvider {
   }
 
   async generateArticle(input: GenerateArticleInput): Promise<GenerateOutput> {
+    const parts: PartUnion[] = [];
+    if (input.questionnaire.type === "pdf") {
+      parts.push(createPartFromBase64(input.questionnaire.base64, "application/pdf"));
+    }
+    parts.push(createPartFromText(buildUserPromptText(input)));
+
     const response = await this.client.models.generateContent({
       model: GEMINI_MODEL,
-      contents: buildUserPrompt(input),
+      contents: parts,
       config: {
         systemInstruction: SYSTEM_PROMPT,
         responseMimeType: "application/json",

@@ -8,7 +8,10 @@ import { dbErrorResponse } from "@/lib/api-error";
 
 const requestSchema = z.object({
   transcript: z.string().min(1),
-  questionnaire: z.string().optional().default(""),
+  questionnaire: z.discriminatedUnion("type", [
+    z.object({ type: z.literal("text"), value: z.string().min(1) }),
+    z.object({ type: z.literal("pdf"), base64: z.string().min(1) }),
+  ]),
   scope: z.string().optional().default("전체"),
   intervieweeName: z.string().min(1),
 });

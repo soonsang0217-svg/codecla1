@@ -15,19 +15,26 @@ export const SYSTEM_PROMPT = `당신은 인터뷰 녹취록을 잡지/브런치 
 11. subtitle은 항상 "[대신 만나드립니다]"로 고정한다.
 12. 모든 텍스트는 한국어 문어체로 작성한다.`;
 
+import type { QuestionnaireInput } from "./types";
+
 export interface BuildUserPromptInput {
   transcript: string;
-  questionnaire: string;
+  questionnaire: QuestionnaireInput;
   scope: string;
   intervieweeName: string;
 }
 
-export function buildUserPrompt({
-  transcript,
-  questionnaire,
-  scope,
-  intervieweeName,
-}: BuildUserPromptInput): string {
+/**
+ * The text portion of the prompt. When the questionnaire is a PDF, the
+ * caller is responsible for also attaching it as a document content block —
+ * this only tells the model to look for it there.
+ */
+export function buildUserPromptText({ transcript, questionnaire, scope, intervieweeName }: BuildUserPromptInput): string {
+  const questionnaireSection =
+    questionnaire.type === "pdf"
+      ? "이 메시지에 PDF 파일로 첨부되어 있습니다. 첨부된 PDF를 직접 읽고 질문 목록을 파악하세요."
+      : questionnaire.value || "(질문지가 첨부되지 않았습니다. 녹취록의 흐름에서 질문을 유추해 섹션을 구성하세요.)";
+
   return `아래 인터뷰 녹취록과 질문지를 바탕으로 인터뷰 기사 초안을 만들어 주세요.
 
 ## 인터뷰이 이름
@@ -37,7 +44,7 @@ ${intervieweeName}
 ${scope || "전체"}
 
 ## 질문지
-${questionnaire || "(질문지가 첨부되지 않았습니다. 녹취록의 흐름에서 질문을 유추해 섹션을 구성하세요.)"}
+${questionnaireSection}
 
 ## 녹취록
 ${transcript}`;
