@@ -129,7 +129,7 @@ function FileDropInput({
             <div className="min-w-0">
               <p className="truncate text-sm font-medium text-green-800">{slot.fileName}</p>
               <p className="text-xs text-green-600">
-                {slot.kind === "text" ? `${slot.text.length.toLocaleString()}자 추출됨` : `PDF 첨부됨 (AI가 직접 읽습니다) · ${formatBytes(slot.byteSize)}`}
+                {slot.kind === "text" ? `${slot.text.length.toLocaleString()}자 추출됨` : `PDF 첨부됨 · ${formatBytes(slot.byteSize)}`}
               </p>
             </div>
             <button
@@ -233,7 +233,10 @@ export default function NewInterviewPage() {
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "생성에 실패했습니다");
+      if (!res.ok) {
+        const base = data.error ?? "생성에 실패했습니다";
+        throw new Error(data.detail ? `${base} (${data.detail})` : base);
+      }
       setResult(data);
     } catch (err) {
       setGenerateError(err instanceof Error ? err.message : "생성에 실패했습니다");

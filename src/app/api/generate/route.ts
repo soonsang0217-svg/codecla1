@@ -4,7 +4,7 @@ import { z } from "zod";
 import { db } from "@/lib/db/client";
 import { interviews } from "@/lib/db/schema";
 import { getAIProvider } from "@/lib/ai/provider";
-import { dbErrorResponse } from "@/lib/api-error";
+import { dbErrorResponse, aiErrorResponse } from "@/lib/api-error";
 
 const requestSchema = z.object({
   transcript: z.string().min(1),
@@ -28,11 +28,7 @@ export async function POST(request: NextRequest) {
     const provider = await getAIProvider();
     result = await provider.generateArticle(parsed.data);
   } catch (err) {
-    console.error("AI generation failed", err);
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "AI 생성 중 오류가 발생했습니다" },
-      { status: 502 },
-    );
+    return aiErrorResponse(err);
   }
 
   const now = new Date();

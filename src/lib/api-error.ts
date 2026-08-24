@@ -26,3 +26,28 @@ export function dbErrorResponse(err: unknown) {
 
   return NextResponse.json({ error: hint, detail: full.trim() }, { status: 500 });
 }
+
+/**
+ * Turns a caught AI-provider error (Anthropic/Gemini SDK) into an actionable
+ * message — this is almost always a missing/invalid API key, which the raw
+ * SDK error buries inside a nested JSON blob that isn't useful to read as-is.
+ */
+export function aiErrorResponse(err: unknown) {
+  console.error("AI generation failed", err);
+  const message = err instanceof Error ? err.message : String(err);
+  const provider = (process.env.AI_PROVIDER || "gemini").toLowerCase();
+  const keyName = provider === "anthropic" ? "ANTHROPIC_API_KEY" : "GEMINI_API_KEY";
+
+  let hint = "AI 생성 중 오류가 발생했습니다.";
+  if (message.includes(`${keyName} environment variable is not set`)) {
+    hint = `${keyName} 환경변수가 설정되지 않았습니다. Vercel 프로젝트 설정에서 확인해주세요.`;
+  } else if (/API_KEY_INVALID|API key not valid|invalid x-api-key|authentication_error|401/i.test(message)) {
+    hint = `${keyName}가 올바르지 않습니다. 발급받은 키를 다시 확인해 Vercel 환경변수에 정확히 입력했는지 확인해주세요.`;
+  } else if (/RESOURCE_EXHAUSTED|rate_limit|429/i.test(message)) {
+    hint = "AI 요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요.";
+  } else if (/PERMISSION_DENIED|billing/i.test(message)) {
+    hint = `${keyName}에 결제(billing)가 연결되어 있는지 확인해주세요.`;
+  }
+
+  return NextResponse.json({ error: hint, detail: message }, { status: 502 });
+}
