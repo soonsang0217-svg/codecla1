@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Stepper from "@/components/Stepper";
 import type { GenerateOutput } from "@/lib/ai/types";
@@ -18,9 +18,15 @@ async function uploadAndExtract(file: File, kind: "transcript" | "questionnaire"
   formData.append("file", file);
   formData.append("kind", kind);
   const res = await fetch("/api/extract", { method: "POST", body: formData });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error ?? "파일을 처리하지 못했습니다");
-  return { fileName: data.fileName, text: data.text };
+  const raw = await res.text();
+  let data: { fileName?: string; text?: string; error?: string };
+  try {
+    data = raw ? JSON.parse(raw) : {};
+  } catch {
+    throw new Error(`서버 오류로 파일을 처리하지 못했습니다 (status ${res.status})`);
+  }
+  if (!res.ok) throw new Error(data.error ?? `파일을 처리하지 못했습니다 (status ${res.status})`);
+  return { fileName: data.fileName ?? file.name, text: data.text ?? "" };
 }
 
 function FileDropInput({
@@ -29,6 +35,7 @@ function FileDropInput({
   accept,
   slot,
   error,
+  uploading,
   onFile,
 }: {
   label: string;
@@ -36,23 +43,68 @@ function FileDropInput({
   accept: string;
   slot: FileSlot | null;
   error: string | null;
+  uploading: boolean;
   onFile: (file: File) => void;
 }) {
+  const inputId = useId();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [dragging, setDragging] = useState(false);
+
+  function handleFiles(files: FileList | null) {
+    const file = files?.[0];
+    if (file) onFile(file);
+  }
+
   return (
     <div className="space-y-1.5">
-      <label className="text-sm font-medium text-neutral-800">{label}</label>
+      <label htmlFor={inputId} className="text-sm font-medium text-neutral-800">
+        {label}
+      </label>
       <p className="text-xs text-neutral-400">{hint}</p>
-      <input
-        type="file"
-        accept={accept}
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) onFile(file);
-          e.target.value = "";
+
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => inputRef.current?.click()}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") inputRef.current?.click();
         }}
-        className="block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-neutral-900 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white"
-      />
-      {slot && <p className="text-xs text-green-700">업로드됨: {slot.fileName} ({slot.text.length.toLocaleString()}자 추출)</p>}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragging(false);
+          handleFiles(e.dataTransfer.files);
+        }}
+        className={
+          "flex cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed px-4 py-6 text-center transition-colors " +
+          (dragging ? "border-neutral-900 bg-neutral-100" : "border-neutral-300 hover:border-neutral-400")
+        }
+      >
+        <p className="text-sm text-neutral-600">
+          파일을 여기로 <span className="font-medium text-neutral-900">드래그 앤 드롭</span>하거나 클릭해서 선택하세요
+        </p>
+        <input
+          id={inputId}
+          ref={inputRef}
+          type="file"
+          accept={accept}
+          onClick={(e) => e.stopPropagation()}
+          onChange={(e) => {
+            handleFiles(e.target.files);
+            e.target.value = "";
+          }}
+          className="hidden"
+        />
+      </div>
+
+      {uploading && <p className="text-xs text-neutral-400">업로드 중...</p>}
+      {slot && !uploading && (
+        <p className="text-xs text-green-700">업로드됨: {slot.fileName} ({slot.text.length.toLocaleString()}자 추출)</p>
+      )}
       {error && <p className="text-xs text-red-600">{error}</p>}
     </div>
   );
@@ -66,8 +118,10 @@ export default function NewInterviewPage() {
   const [scope, setScope] = useState("전체");
   const [transcript, setTranscript] = useState<FileSlot | null>(null);
   const [transcriptError, setTranscriptError] = useState<string | null>(null);
+  const [transcriptUploading, setTranscriptUploading] = useState(false);
   const [questionnaire, setQuestionnaire] = useState<FileSlot | null>(null);
   const [questionnaireError, setQuestionnaireError] = useState<string | null>(null);
+  const [questionnaireUploading, setQuestionnaireUploading] = useState(false);
 
   const [generating, setGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
@@ -77,21 +131,27 @@ export default function NewInterviewPage() {
 
   async function handleTranscriptFile(file: File) {
     setTranscriptError(null);
+    setTranscriptUploading(true);
     try {
       setTranscript(await uploadAndExtract(file, "transcript"));
     } catch (err) {
       setTranscript(null);
       setTranscriptError(err instanceof Error ? err.message : "업로드 실패");
+    } finally {
+      setTranscriptUploading(false);
     }
   }
 
   async function handleQuestionnaireFile(file: File) {
     setQuestionnaireError(null);
+    setQuestionnaireUploading(true);
     try {
       setQuestionnaire(await uploadAndExtract(file, "questionnaire"));
     } catch (err) {
       setQuestionnaire(null);
       setQuestionnaireError(err instanceof Error ? err.message : "업로드 실패");
+    } finally {
+      setQuestionnaireUploading(false);
     }
   }
 
@@ -134,6 +194,7 @@ export default function NewInterviewPage() {
             accept=".txt,.docx"
             slot={transcript}
             error={transcriptError}
+            uploading={transcriptUploading}
             onFile={handleTranscriptFile}
           />
           <FileDropInput
@@ -142,6 +203,7 @@ export default function NewInterviewPage() {
             accept=".txt,.docx,.pdf"
             slot={questionnaire}
             error={questionnaireError}
+            uploading={questionnaireUploading}
             onFile={handleQuestionnaireFile}
           />
 

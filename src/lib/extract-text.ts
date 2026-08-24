@@ -1,5 +1,13 @@
 import mammoth from "mammoth";
 import { PDFParse } from "pdf-parse";
+import * as pdfjsWorker from "pdfjs-dist/legacy/build/pdf.worker.mjs";
+
+// pdf-parse (via pdfjs-dist) normally spawns/dynamically imports a separate
+// worker script on first use. Next.js's bundler doesn't emit that file as a
+// standalone chunk, so the dynamic import 404s ("Setting up fake worker
+// failed"). Registering the worker module on globalThis makes pdfjs-dist run
+// parsing on the main thread instead, skipping that broken import entirely.
+(globalThis as unknown as { pdfjsWorker?: unknown }).pdfjsWorker = pdfjsWorker;
 
 export const ALLOWED_TRANSCRIPT_EXTENSIONS = [".txt", ".docx"];
 export const ALLOWED_QUESTIONNAIRE_EXTENSIONS = [".docx", ".pdf", ".txt"];

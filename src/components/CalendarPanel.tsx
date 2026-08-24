@@ -23,11 +23,13 @@ export default function CalendarPanel() {
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({ intervieweeName: "", memo: "" });
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/calendar-events")
       .then((r) => r.json())
       .then((data) => setEvents(data.events ?? []))
+      .catch(() => setError("일정을 불러오지 못했습니다"))
       .finally(() => setLoading(false));
   }, []);
 
@@ -39,6 +41,7 @@ export default function CalendarPanel() {
     e.preventDefault();
     if (!form.intervieweeName.trim()) return;
     setSubmitting(true);
+    setError(null);
     try {
       const res = await fetch("/api/calendar-events", {
         method: "POST",
@@ -49,19 +52,30 @@ export default function CalendarPanel() {
           memo: form.memo || undefined,
         }),
       });
-      if (res.ok) {
-        const data = await res.json();
-        setEvents((prev) => [...prev, data.event]);
-        setForm({ intervieweeName: "", memo: "" });
+      const raw = await res.text();
+      const data = raw ? JSON.parse(raw) : {};
+      if (!res.ok) {
+        throw new Error(data.error ?? `일정 등록에 실패했습니다 (status ${res.status})`);
       }
+      setEvents((prev) => [...prev, data.event]);
+      setForm({ intervieweeName: "", memo: "" });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "일정 등록에 실패했습니다");
     } finally {
       setSubmitting(false);
     }
   }
 
   async function handleDelete(id: string) {
+    const removed = events.find((e) => e.id === id);
     setEvents((prev) => prev.filter((e) => e.id !== id));
-    await fetch(`/api/calendar-events/${id}`, { method: "DELETE" });
+    try {
+      const res = await fetch(`/api/calendar-events/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error();
+    } catch {
+      setError("일정 삭제에 실패했습니다");
+      if (removed) setEvents((prev) => [...prev, removed]);
+    }
   }
 
   return (
@@ -112,12 +126,13 @@ export default function CalendarPanel() {
             placeholder="메모 (선택)"
             className="w-full rounded border border-neutral-300 px-2 py-1.5 text-sm"
           />
+          {error && <p className="text-xs text-red-600">{error}</p>}
           <button
             type="submit"
             disabled={submitting || !form.intervieweeName.trim()}
             className="w-full rounded bg-neutral-900 px-2 py-1.5 text-sm font-medium text-white disabled:opacity-40"
           >
-            일정 등록
+            {submitting ? "등록 중..." : "일정 등록"}
           </button>
         </form>
       </div>
