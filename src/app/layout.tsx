@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import UserBar from "@/components/UserBar";
 
 export const metadata: Metadata = {
   title: "인터뷰 기사 초안 생성기",
@@ -10,6 +11,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="ko">
       <body className="flex min-h-screen flex-col antialiased">
+        <UserBar />
         <div className="flex-1">{children}</div>
         <footer className="py-4 text-center text-xs text-neutral-400">
           제작자: 오리너구리, &lt;대신만나드립니다 인터뷰 초안 생성기&gt;

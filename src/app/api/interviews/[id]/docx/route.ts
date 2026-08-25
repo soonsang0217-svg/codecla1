@@ -5,8 +5,9 @@ import { interviews } from "@/lib/db/schema";
 import { buildArticleDocx, docxFileName } from "@/lib/docx-export";
 import { dbErrorResponse } from "@/lib/api-error";
 import { parseArticle } from "@/lib/article";
+import { getSession, canAccessInterview } from "@/lib/auth";
 
-export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
   let row: typeof interviews.$inferSelect | undefined;
@@ -16,6 +17,9 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     return dbErrorResponse(err);
   }
   if (!row) return NextResponse.json({ error: "찾을 수 없습니다" }, { status: 404 });
+  if (!canAccessInterview(getSession(request), row.createdBy)) {
+    return NextResponse.json({ error: "작성자만 열람 및 편집할 수 있습니다" }, { status: 403 });
+  }
 
   const article = parseArticle(row.articleJson);
   const buffer = await buildArticleDocx(article);

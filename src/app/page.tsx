@@ -1,9 +1,14 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import Stepper from "@/components/Stepper";
 import CalendarPanel from "@/components/CalendarPanel";
 import InterviewList from "@/components/InterviewList";
+import { verifySessionCookie, SESSION_COOKIE } from "@/lib/session";
 
-export default function DashboardPage() {
+export default async function DashboardPage() {
+  const cookieStore = await cookies();
+  const session = verifySessionCookie(cookieStore.get(SESSION_COOKIE)?.value);
+
   return (
     <main className="mx-auto max-w-4xl space-y-8 p-6">
       <div className="flex items-center justify-between">
@@ -32,7 +37,7 @@ export default function DashboardPage() {
 
       <section className="space-y-3">
         <h2 className="text-sm font-semibold text-neutral-800">작업했던 인터뷰</h2>
-        <InterviewList />
+        <InterviewList currentUsername={session?.username ?? ""} isAdmin={session?.role === "admin"} />
       </section>
     </main>
   );

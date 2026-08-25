@@ -5,6 +5,7 @@ import { db } from "@/lib/db/client";
 import { interviews } from "@/lib/db/schema";
 import { getAIProvider } from "@/lib/ai/provider";
 import { dbErrorResponse, aiErrorResponse } from "@/lib/api-error";
+import { getSession } from "@/lib/auth";
 
 const requestSchema = z.object({
   transcript: z.string().min(1),
@@ -36,6 +37,7 @@ export async function POST(request: NextRequest) {
     id: randomUUID(),
     intervieweeName: parsed.data.intervieweeName,
     status: "draft" as const,
+    createdBy: getSession(request)?.username ?? null,
     articleJson: JSON.stringify(result.article),
     needsCheckJson: JSON.stringify(result.needsCheck),
     revisionSummaryJson: JSON.stringify(result.revisionSummary),

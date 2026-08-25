@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -18,7 +19,7 @@ function LoginForm() {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ username, password }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -36,11 +37,20 @@ function LoginForm() {
     <form onSubmit={handleSubmit} className="w-full max-w-sm space-y-4 rounded-xl border border-neutral-200 bg-white p-8 shadow-sm">
       <div className="space-y-1 text-center">
         <h1 className="text-lg font-semibold">인터뷰 기사 초안 생성기</h1>
-        <p className="text-sm text-neutral-500">팀 공통 비밀번호를 입력하세요</p>
+        <p className="text-sm text-neutral-500">아이디와 비밀번호를 입력하세요</p>
       </div>
       <input
-        type="password"
+        type="text"
         autoFocus
+        autoComplete="username"
+        value={username}
+        onChange={(e) => setUsername(e.target.value)}
+        placeholder="아이디"
+        className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-900"
+      />
+      <input
+        type="password"
+        autoComplete="current-password"
         value={password}
         onChange={(e) => setPassword(e.target.value)}
         placeholder="비밀번호"
@@ -49,7 +59,7 @@ function LoginForm() {
       {error && <p className="text-sm text-red-600">{error}</p>}
       <button
         type="submit"
-        disabled={loading || !password}
+        disabled={loading || !username || !password}
         className="w-full rounded-lg bg-neutral-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-40"
       >
         {loading ? "확인 중..." : "입장하기"}

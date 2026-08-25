@@ -11,6 +11,7 @@ export async function GET() {
         id: interviews.id,
         intervieweeName: interviews.intervieweeName,
         status: interviews.status,
+        createdBy: interviews.createdBy,
         createdAt: interviews.createdAt,
         updatedAt: interviews.updatedAt,
       })

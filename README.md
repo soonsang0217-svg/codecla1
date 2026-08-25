@@ -13,7 +13,8 @@
 5. **완료** — 워드 파일(.docx) 다운로드, 브런치 붙여넣기용 서식 복사, 브런치 글쓰기 페이지 링크
 
 모든 페이지는 상단 스테퍼 UI로 현재 단계를 보여주며, 앱의 모든 라우트는 `src/proxy.ts`에서
-팀 공통 비밀번호 세션 쿠키를 확인합니다(URL 직접 접근 포함).
+로그인 세션 쿠키를 확인합니다(URL 직접 접근 포함). 로그인은 계정별(아이디+비밀번호)이며,
+자신이 만든 인터뷰만 열람·수정할 수 있습니다 — 자세한 내용은 아래 "계정 및 권한" 참고.
 
 ## 기술 스택
 
@@ -62,16 +63,53 @@ npm run db:migrate    # DB에 마이그레이션 적용
 npm run dev
 ```
 
+## 계정 및 권한
+
+- **관리자(admin)** — 아이디 `admin`, 비밀번호는 `TEAM_PASSWORD` 그대로. DB에 저장하지 않는 유일한
+  계정이며, 모든 인터뷰를 열람·수정할 수 있습니다.
+- **일반 계정(member)** — `users` 테이블에 저장. 아이디는 자유 문자열, 비밀번호는 scrypt로 해시해
+  `password_hash` 컬럼(`salt:hash` 형식)에 저장합니다(평문 저장 없음). 자신이 만든 인터뷰만
+  열람·수정할 수 있고, 다른 사람 것은 대시보드 목록에 🔒 표시로 보이기만 하며 클릭하면
+  "작성자만 열람 및 편집할 수 있습니다"로 막힙니다. 이 기능 도입 이전에 만들어진 인터뷰(작성자
+  정보 없음)는 관리자만 열람할 수 있습니다.
+- 상단 바에 로그인한 아이디와 로그아웃 버튼이 항상 표시됩니다(`src/components/UserBar.tsx`).
+
+현재 테스트 계정 2개가 있습니다:
+
+| 아이디 | 비밀번호 |
+|---|---|
+| 카피바라 | zkvlqkfk |
+| 사자 | tkwk |
+
+### 새 계정 추가하기
+
+```bash
+node scripts/hash-password.mjs <새 비밀번호>
+```
+위 명령이 출력하는 `salt:hash` 문자열을 아래 SQL의 `<해시>` 자리에 넣어 Turso SQL 콘솔에서 실행하세요:
+
+```sql
+INSERT INTO users (username, password_hash, role, created_at)
+VALUES ('<아이디>', '<해시>', 'member', unixepoch() * 1000);
+```
+
+`role`을 `'admin'`으로 넣으면 그 계정도 모든 인터뷰를 열람·수정할 수 있는 관리자 권한을 갖습니다
+(아이디 `admin` 하나로 고정된 게 아니라, 필요하면 관리자 계정을 여러 개 둘 수 있습니다). 일반
+팀원 계정은 `'member'`로 두세요.
+
 ## Vercel 배포
 
 1. [turso.tech](https://turso.tech)에서 DB 생성 → `libsql://...` URL과 auth token 발급
    (`turso db create interview-drafts`, `turso db tokens create interview-drafts`)
 2. 로컬에서 그 DB를 대상으로 마이그레이션 적용: `TURSO_DATABASE_URL=... TURSO_AUTH_TOKEN=... npm run db:migrate`
-3. Vercel에서 이 저장소를 Import (Next.js 프로젝트 자동 인식)
-4. Environment Variables에 `.env.example`의 모든 항목 입력
+   (Turso 웹 콘솔의 SQL 콘솔에서 `drizzle/` 폴더의 `.sql` 파일 내용을 직접 실행해도 됩니다 —
+   각 `CREATE TABLE`/`ALTER TABLE` 문마다 따로 실행해야 합니다)
+3. 위 "계정 및 권한 → 새 계정 추가하기"대로 `users` 테이블에 팀원 계정을 추가
+4. Vercel에서 이 저장소를 Import (Next.js 프로젝트 자동 인식)
+5. Environment Variables에 `.env.example`의 모든 항목 입력
    (`TEAM_PASSWORD`, `SESSION_SECRET`, `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`,
    `AI_PROVIDER`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`)
-5. Deploy
+6. Deploy
 
 이후 `git push`하면 Vercel이 자동으로 재배포합니다.
 
@@ -97,24 +135,27 @@ Anthropic으로 되돌리려면 Vercel 환경변수에서 `AI_PROVIDER=anthropic
 ```
 src/
   app/
-    login/                 팀 비밀번호 입력 (1단계 이전, proxy가 게이팅)
+    login/                 아이디/비밀번호 로그인 (1단계 이전, proxy가 게이팅)
     page.tsx               1단계: 대시보드 (캘린더 + 작업 목록)
     new/                    2·3단계: 업로드 + AI 생성 (한 페이지, 내부 스테퍼)
-    interview/[id]/         4·5단계: 검토·수정 + 완료 (탭으로 구분)
+    interview/[id]/         4·5단계: 검토·수정 + 완료 (탭으로 구분). 작성자/관리자가 아니면 접근 차단
     api/
       auth/                 로그인/로그아웃
       calendar-events/      캘린더 CRUD
-      interviews/           인터뷰 목록/상세/수정/docx 다운로드
+      interviews/           인터뷰 목록/상세/수정/docx 다운로드 (상세 이하는 작성자/관리자만)
       extract/              업로드 파일 → 텍스트 추출
-      generate/             AI 생성 (유일한 비용 발생 지점) + DB 레코드 생성
-  components/                Stepper, CalendarPanel, InterviewList, InterviewEditor
+      generate/             AI 생성 (유일한 비용 발생 지점) + DB 레코드 생성(작성자 기록)
+  components/                Stepper, CalendarPanel, InterviewList, InterviewEditor, UserBar, LogoutButton
   lib/
     ai/                      AI Provider 추상화 (provider.ts, anthropic.ts, gemini.ts, schema.ts, prompt.ts)
-    db/                      Drizzle 스키마 + 클라이언트
+    db/                      Drizzle 스키마(users/calendar_events/interviews) + 클라이언트
     article.ts                구조화 기사 타입 + 분량/읽기시간 계산
     docx-export.ts             워드 파일 생성 ([대신 만나드립니다] 스타일)
     clipboard-html.ts          브런치 붙여넣기용 서식 HTML
     extract-text.ts             .txt/.docx/.pdf 텍스트 추출
-    session.ts / rate-limit.ts  인증 세션 / 레이트리밋
-  proxy.ts                   전체 라우트 비밀번호 게이팅 + /api/generate 레이트리밋
+    session.ts / password.ts    로그인 세션(아이디+역할) / 비밀번호 해시(scrypt)
+    auth.ts / rate-limit.ts     라우트별 소유권 검사 / 레이트리밋
+  proxy.ts                   전체 라우트 로그인 게이팅 + /api/generate 레이트리밋
+scripts/
+  hash-password.mjs          새 계정 비밀번호 해시 생성 (README "새 계정 추가하기" 참고)
 ```

@@ -20,16 +20,16 @@ export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (!isPublic(pathname)) {
-    let authenticated = false;
+    let session = null;
     try {
-      authenticated = verifySessionCookie(request.cookies.get(SESSION_COOKIE)?.value);
+      session = verifySessionCookie(request.cookies.get(SESSION_COOKIE)?.value);
     } catch (err) {
       // Most likely SESSION_SECRET is missing/misconfigured. Fail closed to
       // the login page instead of crashing the whole site with a raw 500.
       console.error("Failed to verify session cookie", err);
     }
 
-    if (!authenticated) {
+    if (!session) {
       if (pathname.startsWith("/api/")) {
         return NextResponse.json({ error: "unauthorized" }, { status: 401 });
       }

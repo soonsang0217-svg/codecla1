@@ -1,5 +1,17 @@
 import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
 
+// Test/member accounts (see src/lib/password.ts for the hashing scheme). The
+// "admin" account is not stored here — it authenticates against TEAM_PASSWORD
+// (see src/app/api/auth/login/route.ts) and has access to every interview.
+export const users = sqliteTable("users", {
+  username: text("username").primaryKey(),
+  passwordHash: text("password_hash").notNull(),
+  role: text("role", { enum: ["admin", "member"] })
+    .notNull()
+    .default("member"),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+});
+
 export const calendarEvents = sqliteTable("calendar_events", {
   id: text("id").primaryKey(),
   intervieweeName: text("interviewee_name").notNull(),
@@ -21,6 +33,9 @@ export const interviews = sqliteTable("interviews", {
   needsCheckJson: text("needs_check_json").notNull().default("[]"),
   // "AI가 수정한 부분" summary shown once after generation — see src/lib/article.ts RevisionSummary
   revisionSummaryJson: text("revision_summary_json").notNull().default("{}"),
+  // Owning account's username. Null for interviews created before per-user
+  // login existed — those are admin-only (see src/lib/auth.ts canAccessInterview).
+  createdBy: text("created_by"),
   createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
   updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
 });
