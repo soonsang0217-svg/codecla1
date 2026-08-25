@@ -18,6 +18,8 @@ export function dbErrorResponse(err: unknown) {
     hint = "TURSO_DATABASE_URL 환경변수가 설정되지 않았습니다. Vercel 프로젝트 설정에서 확인해주세요.";
   } else if (/no such table/i.test(full)) {
     hint = "DB 테이블이 없습니다. 배포 전에 `npm run db:migrate`로 마이그레이션을 적용했는지 확인해주세요.";
+  } else if (/no such column/i.test(full)) {
+    hint = "DB 컬럼이 없습니다. 최근 스키마 변경(drizzle/ 폴더의 마이그레이션)을 아직 적용하지 않은 것 같습니다. Turso SQL 콘솔에서 적용해주세요.";
   } else if (/UNAUTHENTICATED|401|invalid.*token/i.test(full)) {
     hint = "TURSO_AUTH_TOKEN이 올바르지 않습니다. Turso에서 토큰을 다시 발급해 확인해주세요.";
   } else if (/getaddrinfo|ENOTFOUND|fetch failed|network/i.test(full)) {
