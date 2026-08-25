@@ -41,6 +41,20 @@ export interface RevisionSummary {
   offRecordExcluded: string[];
 }
 
+/**
+ * Parses a stored `article_json` value, upgrading the legacy shape (intro/outro
+ * as `string[]`, one entry per paragraph — used before intro/outro became
+ * free-form text fields) so interviews created before that change still load.
+ */
+export function parseArticle(json: string): ArticleContent {
+  const raw = JSON.parse(json) as ArticleContent | (Omit<ArticleContent, "intro" | "outro"> & { intro: string[]; outro: string[] });
+  return {
+    ...raw,
+    intro: Array.isArray(raw.intro) ? raw.intro.join("\n\n") : raw.intro,
+    outro: Array.isArray(raw.outro) ? raw.outro.join("\n\n") : raw.outro,
+  };
+}
+
 export function emptyArticle(intervieweeName: string): ArticleContent {
   return {
     title: `${intervieweeName} 인터뷰`,

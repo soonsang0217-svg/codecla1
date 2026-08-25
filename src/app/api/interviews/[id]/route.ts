@@ -5,14 +5,14 @@ import { db } from "@/lib/db/client";
 import { interviews } from "@/lib/db/schema";
 import { articleContentSchema } from "@/lib/ai/schema";
 import { dbErrorResponse } from "@/lib/api-error";
-import type { ArticleContent, NeedsCheckItem, RevisionSummary } from "@/lib/article";
+import { parseArticle, type NeedsCheckItem, type RevisionSummary } from "@/lib/article";
 
 function serialize(row: typeof interviews.$inferSelect) {
   return {
     id: row.id,
     intervieweeName: row.intervieweeName,
     status: row.status,
-    article: JSON.parse(row.articleJson) as ArticleContent,
+    article: parseArticle(row.articleJson),
     needsCheck: JSON.parse(row.needsCheckJson) as NeedsCheckItem[],
     revisionSummary: JSON.parse(row.revisionSummaryJson) as RevisionSummary,
     createdAt: row.createdAt,
