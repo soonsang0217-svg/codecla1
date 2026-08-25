@@ -80,7 +80,7 @@ npm run dev
 `src/lib/ai/provider.ts`가 `AI_PROVIDER` 환경변수(`gemini` 기본값 | `anthropic`)를 보고
 `src/lib/ai/gemini.ts` 또는 `src/lib/ai/anthropic.ts` 구현체를 선택합니다. 두 구현체 모두
 `src/lib/ai/schema.ts`에 정의된 동일한 구조화 JSON(zod 스키마)을 반환하도록 강제되어 있어,
-전환 시 나머지 코드는 전혀 바꿀 필요가 없습니다. 현재 기본 모델은 Gemini Flash(`gemini-2.5-flash`,
+전환 시 나머지 코드는 전혀 바꿀 필요가 없습니다. 현재 기본 모델은 Gemini Flash(`gemini-3.6-flash`,
 유료 API, `src/lib/ai/gemini.ts`의 `GEMINI_MODEL` 상수에서 변경 가능)입니다.
 
 Anthropic으로 되돌리려면 Vercel 환경변수에서 `AI_PROVIDER=anthropic`으로 바꾸고

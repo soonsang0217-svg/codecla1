@@ -49,6 +49,8 @@ export function aiErrorResponse(err: unknown) {
     hint = "AI 서버가 일시적으로 혼잡합니다. 잠시 후(1~2분 뒤) 다시 시도해주세요.";
   } else if (/PERMISSION_DENIED|billing/i.test(message)) {
     hint = `${keyName}에 결제(billing)가 연결되어 있는지 확인해주세요.`;
+  } else if (provider === "gemini" && /"code":\s*404|NOT_FOUND|is no longer available|no longer available to new/i.test(message)) {
+    hint = "설정된 Gemini 모델을 더 이상 쓸 수 없습니다. src/lib/ai/gemini.ts의 GEMINI_MODEL을 코드에 안내된 대체 모델로 바꿔주세요.";
   }
 
   return NextResponse.json({ error: hint, detail: message }, { status: 502 });

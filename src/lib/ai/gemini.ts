@@ -4,12 +4,16 @@ import { SYSTEM_PROMPT, buildUserPromptText } from "./prompt";
 import { generateOutputSchema, type GenerateOutput } from "./schema";
 import type { AIProvider, GenerateArticleInput } from "./types";
 
-// Paid Gemini Flash model. gemini-2.5-flash (not the newer 3.x line) on
-// purpose: freshly-launched Gemini models routinely hit 503 "high demand"
-// for weeks after release while Google scales up capacity, regardless of
-// paid billing — 2.5-flash has been GA long enough to have that headroom.
-// Bump this once a newer generation has had time to mature.
-const GEMINI_MODEL = "gemini-2.5-flash";
+// Paid Gemini Flash model. gemini-2.5-flash is no longer available to new
+// API keys/projects (Google returns a 404 pointing callers at a newer
+// model), so that's off the table. gemini-3.7-flash (the newest at the
+// time this app was built) was hitting sustained 503 "high demand" errors
+// typical of a just-launched model still scaling up capacity. 3.6-flash is
+// one generation older — Google's own 404 message names it as the
+// replacement for 2.5-flash — so it should have both current API access
+// and more mature capacity than 3.7. Bump this once a newer generation has
+// had time to mature, or back if 3.6 itself gets deprecated.
+const GEMINI_MODEL = "gemini-3.6-flash";
 
 // Gemini occasionally returns 503 ("model currently experiencing high
 // demand") or 429 under normal load — both are transient, so a short retry
