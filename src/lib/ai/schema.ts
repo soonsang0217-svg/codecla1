@@ -22,16 +22,13 @@ export const articleContentSchema = z.object({
   title: z.string().describe("기사 제목"),
   subtitle: z.string().describe("부제. 고정값 '[대신 만나드립니다]'을 그대로 사용"),
   intro: z
-    .array(z.string())
-    .length(3)
-    .describe("인트로 3문단. 각 배열 원소가 한 문단"),
+    .string()
+    .describe("인트로. 문단이 여러 개면 빈 줄로 구분. 문단 수는 자유롭게 정하되 인터뷰이의 발언/현장 분위기를 압축하지 말 것"),
   bio: z.string().describe("[약력] 박스에 들어갈 내용"),
   sections: z.array(articleSectionSchema),
   outro: z
-    .array(z.string())
-    .describe(
-      "아웃트로 문단들(보통 2문단). 구간(부분) 작업이라 마무리 멘트가 없으면 빈 배열([])을 반환",
-    ),
+    .string()
+    .describe("아웃트로. 문단이 여러 개면 빈 줄로 구분. 구간(부분) 작업이라 마무리 멘트가 없으면 빈 문자열을 반환"),
 });
 
 export const needsCheckItemSchema = z.object({

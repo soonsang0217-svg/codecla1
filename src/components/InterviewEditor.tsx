@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import Stepper from "@/components/Stepper";
 import {
   characterCount,
@@ -21,6 +22,13 @@ interface Props {
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 
+interface Snapshot {
+  article: ArticleContent;
+  needsCheck: NeedsCheckItem[];
+}
+
+const MAX_UNDO = 20;
+
 export default function InterviewEditor({ id, intervieweeName, status: initialStatus, article: initialArticle, needsCheck: initialNeedsCheck }: Props) {
   const [tab, setTab] = useState<"edit" | "finish">("edit");
   const [article, setArticle] = useState<ArticleContent>(initialArticle);
@@ -28,6 +36,7 @@ export default function InterviewEditor({ id, intervieweeName, status: initialSt
   const [status, setStatus] = useState(initialStatus);
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [copyMessage, setCopyMessage] = useState<string | null>(null);
+  const [undoStack, setUndoStack] = useState<Snapshot[]>([]);
 
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const skipNextAutosave = useRef(true); // don't autosave on initial mount
@@ -93,21 +102,41 @@ export default function InterviewEditor({ id, intervieweeName, status: initialSt
     setTimeout(() => setCopyMessage(null), 4000);
   }
 
+  /** Call right before a destructive edit (section/question/checklist-item delete) so it can be undone. */
+  function pushUndoSnapshot() {
+    setUndoStack((stack) => [...stack.slice(-(MAX_UNDO - 1)), { article, needsCheck }]);
+  }
+
+  function handleUndo() {
+    setUndoStack((stack) => {
+      if (stack.length === 0) return stack;
+      const last = stack[stack.length - 1];
+      setArticle(last.article);
+      setNeedsCheck(last.needsCheck);
+      return stack.slice(0, -1);
+    });
+  }
+
   const chars = characterCount(article);
   const minutes = estimatedReadingMinutes(article);
 
   return (
-    <main className="mx-auto max-w-5xl space-y-6 p-6">
+    <main className="mx-auto max-w-7xl space-y-6 p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Stepper current={tab === "edit" ? 4 : 5} />
-        <span
-          className={
-            "rounded-full px-2 py-0.5 text-xs font-medium " +
-            (status === "complete" ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700")
-          }
-        >
-          {status === "complete" ? "완료" : "작업중"}
-        </span>
+        <div className="flex items-center gap-3">
+          <span
+            className={
+              "rounded-full px-2 py-0.5 text-xs font-medium " +
+              (status === "complete" ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700")
+            }
+          >
+            {status === "complete" ? "완료" : "작업중"}
+          </span>
+          <Link href="/" className="text-xs text-neutral-400 underline hover:text-neutral-700">
+            ← 대시보드로
+          </Link>
+        </div>
       </div>
 
       <div className="flex gap-1 border-b border-neutral-200">
@@ -126,10 +155,16 @@ export default function InterviewEditor({ id, intervieweeName, status: initialSt
       </div>
 
       {tab === "edit" && (
-        <div className="grid gap-6 lg:grid-cols-[1fr_240px]">
-          <EditorForm article={article} setArticle={setArticle} needsCheck={needsCheck} setNeedsCheck={setNeedsCheck} />
+        <div className="grid gap-6 lg:grid-cols-[260px_1fr_260px]">
+          <aside className="lg:sticky lg:top-6 lg:self-start lg:order-1">
+            <ChecklistSidebar needsCheck={needsCheck} setNeedsCheck={setNeedsCheck} onBeforeDestructive={pushUndoSnapshot} />
+          </aside>
 
-          <aside className="space-y-4 lg:sticky lg:top-6 lg:self-start">
+          <div className="lg:order-2">
+            <EditorForm article={article} setArticle={setArticle} onBeforeDestructive={pushUndoSnapshot} />
+          </div>
+
+          <aside className="space-y-4 lg:sticky lg:top-6 lg:order-3 lg:self-start">
             <div className="rounded-lg border border-neutral-200 bg-white p-4 text-sm">
               <p className="text-neutral-400">현재 분량</p>
               <p className="text-xl font-semibold">{chars.toLocaleString()}자</p>
@@ -149,13 +184,33 @@ export default function InterviewEditor({ id, intervieweeName, status: initialSt
                 {saveState === "error" && "저장 실패"}
                 {saveState === "idle" && "수정하면 자동 저장됩니다"}
               </p>
+              <button
+                onClick={handleUndo}
+                disabled={undoStack.length === 0}
+                className="mt-3 w-full rounded border border-neutral-300 px-3 py-1.5 text-sm font-medium text-neutral-700 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                ↩ 실행 취소 {undoStack.length > 0 && `(${undoStack.length})`}
+              </button>
             </div>
+            <button
+              onClick={() => setTab("finish")}
+              className="w-full rounded-lg bg-neutral-900 px-3 py-2 text-sm font-medium text-white"
+            >
+              다음: 완료 단계로 →
+            </button>
           </aside>
         </div>
       )}
 
       {tab === "finish" && (
         <div className="max-w-xl space-y-4 rounded-lg border border-neutral-200 bg-white p-6">
+          <button
+            onClick={() => setTab("edit")}
+            className="text-xs text-neutral-400 underline hover:text-neutral-700"
+          >
+            ← 이전: 검토·수정으로
+          </button>
+
           <button
             onClick={toggleStatus}
             className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm font-medium hover:bg-neutral-50"
@@ -194,22 +249,128 @@ export default function InterviewEditor({ id, intervieweeName, status: initialSt
           </div>
 
           <p className="text-xs text-neutral-400">인터뷰이: {intervieweeName}</p>
+
+          <Link
+            href="/"
+            className="block w-full rounded-lg border border-neutral-300 px-3 py-2 text-center text-sm font-medium text-neutral-700 hover:bg-neutral-50"
+          >
+            홈으로
+          </Link>
         </div>
       )}
     </main>
   );
 }
 
+/** Textarea that grows to fit its content instead of scrolling internally. */
+function AutoTextarea({
+  value,
+  onChange,
+  className,
+  placeholder,
+  minRows = 2,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  className?: string;
+  placeholder?: string;
+  minRows?: number;
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [value]);
+
+  return (
+    <textarea
+      ref={ref}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      rows={minRows}
+      className={"resize-none overflow-hidden " + (className ?? "")}
+    />
+  );
+}
+
+function ChecklistSidebar({
+  needsCheck,
+  setNeedsCheck,
+  onBeforeDestructive,
+}: {
+  needsCheck: NeedsCheckItem[];
+  setNeedsCheck: React.Dispatch<React.SetStateAction<NeedsCheckItem[]>>;
+  onBeforeDestructive: () => void;
+}) {
+  return (
+    <div className="space-y-2 rounded-lg border border-neutral-200 bg-white p-4">
+      <p className="text-xs font-medium text-neutral-500">확인 필요 항목</p>
+      {needsCheck.length === 0 ? (
+        <p className="text-sm text-neutral-400">없음</p>
+      ) : (
+        <ul className="space-y-3">
+          {needsCheck.map((item, i) => (
+            <li key={i} className="rounded border border-amber-200 bg-amber-50 p-2">
+              <div className="flex items-start gap-1.5">
+                <input
+                  type="checkbox"
+                  checked={item.resolved ?? false}
+                  onChange={(e) =>
+                    setNeedsCheck((list) => list.map((x, xi) => (xi === i ? { ...x, resolved: e.target.checked } : x)))
+                  }
+                  className="mt-1 shrink-0"
+                />
+                <div className="min-w-0 flex-1 space-y-1">
+                  <input
+                    value={item.item}
+                    onChange={(e) => setNeedsCheck((list) => list.map((x, xi) => (xi === i ? { ...x, item: e.target.value } : x)))}
+                    className={
+                      "w-full min-w-0 rounded border border-neutral-300 px-1.5 py-0.5 text-xs font-medium " +
+                      (item.resolved ? "text-neutral-400 line-through" : "")
+                    }
+                  />
+                  <input
+                    value={item.reason}
+                    onChange={(e) => setNeedsCheck((list) => list.map((x, xi) => (xi === i ? { ...x, reason: e.target.value } : x)))}
+                    className="w-full min-w-0 rounded border border-neutral-300 px-1.5 py-0.5 text-xs text-neutral-600"
+                  />
+                </div>
+                <button
+                  onClick={() => {
+                    onBeforeDestructive();
+                    setNeedsCheck((list) => list.filter((_, xi) => xi !== i));
+                  }}
+                  className="shrink-0 text-xs text-neutral-400 hover:text-red-600"
+                >
+                  ✕
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+      <button
+        onClick={() => setNeedsCheck((list) => [...list, { item: "", reason: "" }])}
+        className="text-xs text-neutral-500 hover:text-neutral-900"
+      >
+        + 항목 추가
+      </button>
+    </div>
+  );
+}
+
 function EditorForm({
   article,
   setArticle,
-  needsCheck,
-  setNeedsCheck,
+  onBeforeDestructive,
 }: {
   article: ArticleContent;
   setArticle: React.Dispatch<React.SetStateAction<ArticleContent>>;
-  needsCheck: NeedsCheckItem[];
-  setNeedsCheck: React.Dispatch<React.SetStateAction<NeedsCheckItem[]>>;
+  onBeforeDestructive: () => void;
 }) {
   return (
     <div className="space-y-6">
@@ -228,26 +389,21 @@ function EditorForm({
         />
       </div>
 
-      <Field label="인트로 (3문단)">
-        {article.intro.map((p, i) => (
-          <textarea
-            key={i}
-            value={p}
-            onChange={(e) =>
-              setArticle((a) => ({ ...a, intro: a.intro.map((x, xi) => (xi === i ? e.target.value : x)) }))
-            }
-            rows={3}
-            className="w-full rounded border border-neutral-300 p-2 text-sm italic"
-          />
-        ))}
+      <Field label="인트로">
+        <AutoTextarea
+          value={article.intro}
+          onChange={(v) => setArticle((a) => ({ ...a, intro: v }))}
+          minRows={4}
+          className="w-full rounded border border-neutral-300 p-3 text-sm leading-relaxed"
+        />
       </Field>
 
       <Field label="[약력]">
-        <textarea
+        <AutoTextarea
           value={article.bio}
-          onChange={(e) => setArticle((a) => ({ ...a, bio: e.target.value }))}
-          rows={3}
-          className="w-full rounded border border-neutral-300 bg-neutral-50 p-2 text-sm"
+          onChange={(v) => setArticle((a) => ({ ...a, bio: v }))}
+          minRows={3}
+          className="w-full rounded border border-neutral-300 bg-neutral-50 p-3 text-sm"
         />
       </Field>
 
@@ -266,7 +422,10 @@ function EditorForm({
               placeholder="섹션 제목"
             />
             <button
-              onClick={() => setArticle((a) => ({ ...a, sections: a.sections.filter((_, i) => i !== si) }))}
+              onClick={() => {
+                onBeforeDestructive();
+                setArticle((a) => ({ ...a, sections: a.sections.filter((_, i) => i !== si) }));
+              }}
               className="text-xs text-neutral-400 hover:text-red-600"
             >
               섹션 삭제
@@ -274,7 +433,7 @@ function EditorForm({
           </div>
 
           {section.qa.map((qa, qi) => (
-            <div key={qi} className="space-y-1 rounded border border-neutral-100 bg-neutral-50 p-2">
+            <div key={qi} className="space-y-1.5 rounded border border-neutral-100 bg-neutral-50 p-3">
               <div className="flex items-center gap-2">
                 <span className="text-xs font-medium text-neutral-400">Q</span>
                 <input
@@ -287,35 +446,36 @@ function EditorForm({
                       ),
                     }))
                   }
-                  className="flex-1 rounded border border-neutral-300 px-2 py-1 text-sm font-medium"
+                  className="flex-1 rounded border border-neutral-300 px-2 py-1.5 text-sm font-medium"
                 />
                 {qa.isExtra && <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700">현장 추가</span>}
                 <button
-                  onClick={() =>
+                  onClick={() => {
+                    onBeforeDestructive();
                     setArticle((a) => ({
                       ...a,
                       sections: a.sections.map((s, i) => (i === si ? { ...s, qa: s.qa.filter((_, j) => j !== qi) } : s)),
-                    }))
-                  }
+                    }));
+                  }}
                   className="text-xs text-neutral-400 hover:text-red-600"
                 >
                   삭제
                 </button>
               </div>
               <div className="flex items-start gap-2">
-                <span className="mt-1.5 text-xs font-medium text-neutral-400">A</span>
-                <textarea
+                <span className="mt-2 text-xs font-medium text-neutral-400">A</span>
+                <AutoTextarea
                   value={qa.answer}
-                  onChange={(e) =>
+                  onChange={(v) =>
                     setArticle((a) => ({
                       ...a,
                       sections: a.sections.map((s, i) =>
-                        i === si ? { ...s, qa: s.qa.map((q, j) => (j === qi ? { ...q, answer: e.target.value } : q)) } : s,
+                        i === si ? { ...s, qa: s.qa.map((q, j) => (j === qi ? { ...q, answer: v } : q)) } : s,
                       ),
                     }))
                   }
-                  rows={3}
-                  className="flex-1 rounded border border-neutral-300 px-2 py-1 text-sm"
+                  minRows={2}
+                  className="flex-1 rounded border border-neutral-300 px-2 py-1.5 text-sm leading-relaxed"
                 />
               </div>
             </div>
@@ -342,64 +502,13 @@ function EditorForm({
         + 섹션 추가
       </button>
 
-      <Field label="아웃트로">
-        {article.outro.length === 0 ? (
-          <button
-            onClick={() => setArticle((a) => ({ ...a, outro: ["", ""] }))}
-            className="text-xs text-neutral-500 hover:text-neutral-900"
-          >
-            + 아웃트로 추가 (구간 작업이라 없으면 생략)
-          </button>
-        ) : (
-          <>
-            {article.outro.map((p, i) => (
-              <textarea
-                key={i}
-                value={p}
-                onChange={(e) =>
-                  setArticle((a) => ({ ...a, outro: a.outro.map((x, xi) => (xi === i ? e.target.value : x)) }))
-                }
-                rows={3}
-                className="w-full rounded border border-neutral-300 p-2 text-sm italic"
-              />
-            ))}
-            <button onClick={() => setArticle((a) => ({ ...a, outro: [] }))} className="text-xs text-neutral-400 hover:text-red-600">
-              아웃트로 없음으로 변경
-            </button>
-          </>
-        )}
-      </Field>
-
-      <Field label="확인 필요 항목">
-        {needsCheck.length === 0 ? (
-          <p className="text-sm text-neutral-400">없음</p>
-        ) : (
-          <ul className="space-y-2">
-            {needsCheck.map((item, i) => (
-              <li key={i} className="flex items-center gap-2 rounded bg-amber-50 p-2 text-sm">
-                <input
-                  value={item.item}
-                  onChange={(e) => setNeedsCheck((list) => list.map((x, xi) => (xi === i ? { ...x, item: e.target.value } : x)))}
-                  className="w-40 rounded border border-neutral-300 px-2 py-1"
-                />
-                <input
-                  value={item.reason}
-                  onChange={(e) => setNeedsCheck((list) => list.map((x, xi) => (xi === i ? { ...x, reason: e.target.value } : x)))}
-                  className="flex-1 rounded border border-neutral-300 px-2 py-1"
-                />
-                <button onClick={() => setNeedsCheck((list) => list.filter((_, xi) => xi !== i))} className="text-neutral-400 hover:text-red-600">
-                  ✕
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-        <button
-          onClick={() => setNeedsCheck((list) => [...list, { item: "", reason: "" }])}
-          className="mt-2 text-xs text-neutral-500 hover:text-neutral-900"
-        >
-          + 항목 추가
-        </button>
+      <Field label="아웃트로 (구간 작업이라 마무리 멘트가 없으면 비워두세요)">
+        <AutoTextarea
+          value={article.outro}
+          onChange={(v) => setArticle((a) => ({ ...a, outro: v }))}
+          minRows={3}
+          className="w-full rounded border border-neutral-300 p-3 text-sm leading-relaxed"
+        />
       </Field>
     </div>
   );

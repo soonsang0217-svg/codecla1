@@ -34,7 +34,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 const updateSchema = z.object({
   intervieweeName: z.string().min(1).optional(),
   article: articleContentSchema.optional(),
-  needsCheck: z.array(z.object({ item: z.string(), reason: z.string() })).optional(),
+  needsCheck: z.array(z.object({ item: z.string(), reason: z.string(), resolved: z.boolean().optional() })).optional(),
   status: z.enum(["draft", "complete"]).optional(),
 });
 

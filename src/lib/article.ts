@@ -18,18 +18,20 @@ export interface ArticleSection {
 export interface ArticleContent {
   title: string;
   subtitle: string;
-  /** Exactly 3 paragraphs, rendered italic with a left border. */
-  intro: string[];
+  /** Free-form text, one or more paragraphs separated by a blank line. Rendered with a left border. */
+  intro: string;
   /** "[약력]" box content. */
   bio: string;
   sections: ArticleSection[];
-  /** 2 paragraphs, italic with a left border. Empty array means the outro block is omitted entirely (e.g. a partial-scope interview with no wrap-up). */
-  outro: string[];
+  /** Free-form text; empty means the outro block is omitted entirely (e.g. a partial-scope interview with no wrap-up). */
+  outro: string;
 }
 
 export interface NeedsCheckItem {
   item: string;
   reason: string;
+  /** Checked off in the review editor once someone has verified it. Never set by the AI. */
+  resolved?: boolean;
 }
 
 export interface RevisionSummary {
@@ -43,24 +45,32 @@ export function emptyArticle(intervieweeName: string): ArticleContent {
   return {
     title: `${intervieweeName} 인터뷰`,
     subtitle: DEFAULT_SUBTITLE,
-    intro: ["", "", ""],
+    intro: "",
     bio: "",
     sections: [],
-    outro: [],
+    outro: "",
   };
 }
 
 const AVG_CHARS_PER_MINUTE = 550; // 분당 한국어 평균 독서 속도(500~600자) 기준 상수. 조정 가능.
 
+/** Split free-form intro/outro text into paragraphs on blank lines (docx/clipboard render each as its own paragraph). */
+export function splitParagraphs(text: string): string[] {
+  return text
+    .split(/\n\s*\n/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+}
+
 export function articlePlainText(article: ArticleContent): string {
-  const parts: string[] = [article.title, article.subtitle, ...article.intro, article.bio];
+  const parts: string[] = [article.title, article.subtitle, article.intro, article.bio];
   for (const section of article.sections) {
     parts.push(section.heading);
     for (const qa of section.qa) {
       parts.push(qa.question, qa.answer);
     }
   }
-  if (article.outro.length > 0) parts.push(...article.outro);
+  if (article.outro.trim()) parts.push(article.outro);
   return parts.filter(Boolean).join("\n");
 }
 

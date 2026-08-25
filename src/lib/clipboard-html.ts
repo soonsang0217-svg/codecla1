@@ -1,4 +1,4 @@
-import type { ArticleContent } from "./article";
+import { splitParagraphs, type ArticleContent } from "./article";
 
 function escapeHtml(text: string): string {
   return text
@@ -7,10 +7,9 @@ function escapeHtml(text: string): string {
     .replace(/>/g, "&gt;");
 }
 
-function paragraphs(lines: string[]): string {
-  return lines
-    .filter((l) => l.trim().length > 0)
-    .map((l) => `<p><em>${escapeHtml(l)}</em></p>`)
+function paragraphs(text: string): string {
+  return splitParagraphs(text)
+    .map((p) => `<p>${escapeHtml(p)}</p>`)
     .join("\n");
 }
 
@@ -38,7 +37,7 @@ export function articleToClipboardHtml(article: ArticleContent): string {
     }
   }
 
-  if (article.outro.length > 0) {
+  if (article.outro.trim()) {
     parts.push(paragraphs(article.outro));
   }
 

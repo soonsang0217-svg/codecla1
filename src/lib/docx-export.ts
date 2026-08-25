@@ -8,25 +8,23 @@ import {
   Packer,
   convertInchesToTwip,
 } from "docx";
-import type { ArticleContent } from "./article";
+import { splitParagraphs, type ArticleContent } from "./article";
 
 const BORDER_GRAY = "999999";
 const BOX_FILL = "F2F2F2";
 
-function italicBorderedParagraphs(paragraphs: string[]): Paragraph[] {
-  return paragraphs
-    .filter((p) => p.trim().length > 0)
-    .map(
-      (text) =>
-        new Paragraph({
-          spacing: { after: 160 },
-          indent: { left: convertInchesToTwip(0.25) },
-          border: {
-            left: { style: BorderStyle.SINGLE, size: 12, color: BORDER_GRAY, space: 8 },
-          },
-          children: [new TextRun({ text, italics: true })],
-        }),
-    );
+function borderedParagraphs(text: string): Paragraph[] {
+  return splitParagraphs(text).map(
+    (paragraphText) =>
+      new Paragraph({
+        spacing: { after: 160 },
+        indent: { left: convertInchesToTwip(0.25) },
+        border: {
+          left: { style: BorderStyle.SINGLE, size: 12, color: BORDER_GRAY, space: 8 },
+        },
+        children: [new TextRun({ text: paragraphText })],
+      }),
+  );
 }
 
 function bioBox(bio: string): Paragraph[] {
@@ -91,7 +89,7 @@ export function buildArticleDocx(article: ArticleContent): Promise<Buffer> {
     }),
   );
 
-  children.push(...italicBorderedParagraphs(article.intro));
+  children.push(...borderedParagraphs(article.intro));
   children.push(...bioBox(article.bio));
 
   for (const section of article.sections) {
@@ -101,9 +99,9 @@ export function buildArticleDocx(article: ArticleContent): Promise<Buffer> {
     }
   }
 
-  if (article.outro.length > 0) {
+  if (article.outro.trim()) {
     children.push(new Paragraph({ spacing: { before: 240 }, children: [] }));
-    children.push(...italicBorderedParagraphs(article.outro));
+    children.push(...borderedParagraphs(article.outro));
   }
 
   children.push(

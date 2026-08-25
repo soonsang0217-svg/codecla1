@@ -9,7 +9,12 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ko">
-      <body className="min-h-screen antialiased">{children}</body>
+      <body className="flex min-h-screen flex-col antialiased">
+        <div className="flex-1">{children}</div>
+        <footer className="py-4 text-center text-xs text-neutral-400">
+          제작자: 오리너구리, &lt;대신만나드립니다 인터뷰 초안 생성기&gt;
+        </footer>
+      </body>
     </html>
   );
 }
